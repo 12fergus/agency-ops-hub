@@ -1,0 +1,28 @@
+.claude/settings.local.json
+CLAUDE.local.md
+.env
+.env.*
+!.env.example
+node_modules/
+vendor/
+
+# build / test output
+dist/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+
+# local database and backups (never commit)
+data/
+backups/
+*.sqlite
+*.sqlite3
+*.db
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-wal
+*.sqlite3-shm
+*.db-wal
+*.db-shm
+*.bak

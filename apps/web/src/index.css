@@ -1,0 +1,20 @@
+@import 'tailwindcss';
+
+@theme {
+  /* System fonts with good Hebrew coverage; no external font requests (LAN may be offline, CSP stays strict). */
+  --font-sans: 'Segoe UI', 'Arial Hebrew', Arial, 'Noto Sans Hebrew', sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased;
+}
+
+:focus-visible {
+  @apply outline-2 outline-offset-2 outline-blue-600;
+}
