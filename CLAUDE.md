@@ -12,13 +12,17 @@ Node ≥ 24 (dev host: v26), pnpm 12. Run from repo root.
 - `pnpm lint` · `pnpm format:check` · `pnpm typecheck` · `pnpm test` · `pnpm build`
 - `pnpm test:e2e` — builds, then Playwright against the production server on :3100 with a temp DB
 - `pnpm db:generate` — generate migration SQL from `apps/api/src/db/schema.ts` into `apps/api/migrations/`
-- `pnpm db:migrate` — apply pending migrations to `DATABASE_PATH` (prints the target first)
+- `pnpm db:migrate` — back up (if the DB exists), then apply pending migrations to `DATABASE_PATH` in one transaction; repeatable
+- `pnpm db:backup` — online backup + integrity check into `BACKUP_DIR`
+- `pnpm db:seed:demo --confirm-demo` — fictional demo data on an empty dev DB (refused in production). Procedures: `docs/operations.md`
 - Single test: `pnpm --filter @agency-crm/api exec vitest run test/health.test.ts` (or `-t "name"`)
 - **Before reporting a task done:** `pnpm check` (lint + format + typecheck + test + build), plus `pnpm test:e2e` in UI phases. Report actual output; never claim a pass you didn't run.
+- **Review every phase:** launch the `code-reviewer` agent on the phase's changes (it includes untracked files) in parallel with `test-runner`. Fix confirmed blockers/should-fix items, re-run checks, and include the review result (what was fixed, what was deferred and why) in the phase report.
 
 ## Source of truth
 
-- Specs/decisions: `docs/architecture.md`, `docs/decisions.md` (ADRs), `docs/schema.md`, `docs/api.md`, `docs/progress.md`. Update the relevant ones every phase.
+- Specs/decisions: `docs/architecture.md`, `docs/decisions.md` (ADRs), `docs/schema.md`, `docs/api.md`, `docs/operations.md`, `docs/progress.md`. Update the relevant ones every phase.
+- DB access: repositories in `apps/api/src/db/repositories` take an `Executor` (DB or tx); business rules live in `apps/api/src/modules/*/service.ts` and wrap writes in `withTransaction` (sync callbacks only).
 - Hebrew UI strings: `apps/web/src/lib/i18n/he.ts` only — no hardcoded strings in components.
 - API envelope/types: `packages/shared/src`. `@agency-crm/shared` resolves to `src` in dev/tests (tsconfig `paths` + Vite alias) and to `dist` in the production build.
 - Generated, don't edit: `pnpm-lock.yaml`, `**/dist`, future Drizzle migration SQL once applied.
