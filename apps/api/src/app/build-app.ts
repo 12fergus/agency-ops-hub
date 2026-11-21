@@ -9,6 +9,8 @@ import { authRoutes } from '../modules/auth/routes.js';
 import { clientRoutes } from '../modules/clients/routes.js';
 import { healthRoutes } from '../modules/health/routes.js';
 import { leadRoutes } from '../modules/leads/routes.js';
+import { FirstRunSetup } from '../modules/setup/first-run.js';
+import { setupRoutes } from '../modules/setup/routes.js';
 import { userRoutes } from '../modules/users/routes.js';
 import { registerSecurity } from './security.js';
 
@@ -17,6 +19,8 @@ declare module 'fastify' {
     dbHandle: DbHandle;
     /** Registered API routes (method + url); used by the default-deny test sweep. */
     apiRoutes: { method: string; url: string; public: boolean }[];
+    /** First-run setup state (one-time setup code, env bootstrap). */
+    firstRun: FirstRunSetup;
   }
 }
 
@@ -62,6 +66,7 @@ export async function buildApp(config: Config): Promise<FastifyInstance> {
   const dbHandle = openDatabase(config.DATABASE_PATH);
   app.decorate('dbHandle', dbHandle);
   app.addHook('onClose', async () => dbHandle.close());
+  app.decorate('firstRun', new FirstRunSetup(dbHandle, config, app.log));
 
   app.setErrorHandler<FastifyError>((err, req, reply) => {
     const mapped = err instanceof AppError ? err : mapSqliteError(err);
@@ -96,6 +101,7 @@ export async function buildApp(config: Config): Promise<FastifyInstance> {
     async (api) => {
       await api.register(healthRoutes);
       await api.register(authRoutes, { config });
+      await api.register(setupRoutes, { config });
       await api.register(userRoutes);
       await api.register(clientRoutes);
       await api.register(leadRoutes);

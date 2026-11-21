@@ -41,6 +41,13 @@ const envSchema = z.object({
     .enum(['true', 'false'])
     .default('false')
     .transform((v) => v === 'true'),
+  /**
+   * Optional first-admin bootstrap for scripted installs: used ONCE at startup while no admin
+   * exists. Remove INITIAL_ADMIN_PASSWORD from the config afterwards (it is plain text).
+   */
+  INITIAL_ADMIN_EMAIL: z.string().trim().toLowerCase().optional(),
+  INITIAL_ADMIN_PASSWORD: z.string().optional(),
+  INITIAL_ADMIN_NAME: z.string().trim().min(1).max(100).default('מנהל/ת מערכת'),
   /** Extra allowed Origins for state-changing requests (comma-separated), besides same-origin. */
   TRUSTED_ORIGINS: z
     .string()

@@ -49,6 +49,8 @@ process.on('uncaughtException', (err) => {
 });
 
 try {
+  // First run without a terminal: INITIAL_ADMIN_* bootstrap or a one-time setup code file.
+  await app.firstRun.prepare();
   await app.listen({ host: config.HOST, port: config.PORT });
 } catch (err) {
   app.log.error({ err }, 'failed to start');

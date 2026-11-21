@@ -67,7 +67,14 @@ In approval mode, an admin approves a pending account with `POST /users/:id/enab
 | POST   | `/users/:id/disable` | Revokes all sessions; access ends immediately. `409 CANNOT_DISABLE_SELF`, `409 LAST_ADMIN`.                                                                                                                                                                                                                                                                                        |
 | POST   | `/users/:id/enable`  |                                                                                                                                                                                                                                                                                                                                                                                    |
 
-The first admin is created only by the host CLI `pnpm auth:create-admin`. There is no HTTP route for it.
+The first admin is created without any admin session, in one of three ways: the **setup page** (below), `INITIAL_ADMIN_*` environment variables at startup, or the host CLI `pnpm auth:create-admin`. All three work only while no login-capable admin exists.
+
+### First-run setup
+
+| Method | Path            | Who    | Notes                                                                                                                                                                                                                                                                                                                                                      |
+| ------ | --------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/setup/status` | public | `{data:{needsSetup}}`: true while the DB is migrated and has no admin who can log in. Also makes sure the one-time code file exists.                                                                                                                                                                                                                       |
+| POST   | `/setup`        | public | `{code, email, displayName, password}`. The code is the one-time value from `setup-code.txt` next to the DB (case-insensitive, dashes optional, compared in constant time). → **201** `{data:{user}}` + session cookie (the new admin is logged in). Wrong code → `403 SETUP_CODE_INVALID`. 10 attempts per IP per 15 min. **`404` once an admin exists.** |
 
 ## Clients, members, leads
 

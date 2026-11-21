@@ -37,6 +37,15 @@ export const signupSchema = z.object({
 });
 export type SignupInput = z.infer<typeof signupSchema>;
 
+/** First-run setup: the one-time code from the server's data folder + the first admin's details. */
+export const setupSchema = z.object({
+  code: z.string().trim().min(1).max(40),
+  email,
+  displayName: z.string().trim().min(1).max(100),
+  password: z.string().min(1).max(PASSWORD_MAX_LENGTH),
+});
+export type SetupInput = z.infer<typeof setupSchema>;
+
 export const createUserSchema = z.object({
   email,
   displayName: z.string().trim().min(1).max(100),

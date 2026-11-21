@@ -56,6 +56,16 @@ export const he = {
   'auth.emailRequired': 'יש להזין אימייל',
   'auth.emailInvalid': 'כתובת האימייל אינה תקינה',
   'auth.passwordRequired': 'יש להזין סיסמה',
+  'setup.title': 'הגדרה ראשונית',
+  'setup.intro':
+    'עדיין לא הוגדר מנהל מערכת. צרו את חשבון המנהל הראשון. נדרש קוד ההגדרה החד-פעמי מהשרת.',
+  'setup.codeLabel': 'קוד הגדרה',
+  'setup.codeHelp':
+    'הקוד נמצא בקובץ setup-code.txt בתיקיית הנתונים של השרת (ליד קובץ מסד הנתונים, בדרך כלל data\\setup-code.txt).',
+  'setup.codeRequired': 'יש להזין את קוד ההגדרה',
+  'setup.submit': 'יצירת מנהל המערכת',
+  'setup.submitting': 'יוצר…',
+  'error.SETUP_CODE_INVALID': 'קוד ההגדרה שגוי. העתיקו אותו שוב מהקובץ בשרת.',
   'signup.title': 'הרשמה למערכת',
   'signup.displayName': 'שם מלא',
   'signup.nameRequired': 'יש להזין שם',

@@ -1,7 +1,8 @@
 import { AppShell } from '@/components/AppShell';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { SignupPage } from '@/features/auth/SignupPage';
-import { useCurrentUser, useLogout } from '@/features/auth/session';
+import { useCurrentUser, useLogout, useSetupStatus } from '@/features/auth/session';
+import { SetupPage } from '@/features/auth/SetupPage';
 import { SystemStatus } from '@/features/system/SystemStatus';
 import { UsersPage } from '@/features/users/UsersPage';
 import { errorMessage } from '@/lib/api';
@@ -10,10 +11,11 @@ import { useHashRoute } from '@/lib/useHashRoute';
 
 export function App() {
   const me = useCurrentUser();
+  const setupStatus = useSetupStatus();
   const logout = useLogout();
   const [route, navigate] = useHashRoute();
 
-  if (me.isPending) {
+  if (me.isPending || (!me.data && setupStatus.isPending)) {
     return <p className="p-6">{t('common.loading')}</p>;
   }
   if (me.isError) {
@@ -24,6 +26,8 @@ export function App() {
     );
   }
   if (!me.data) {
+    // Brand-new installation without any admin: first-run setup instead of login/sign-up.
+    if (setupStatus.data?.needsSetup) return <SetupPage />;
     return route === 'signup' ? (
       <SignupPage onLogin={() => navigate('')} />
     ) : (

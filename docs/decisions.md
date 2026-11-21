@@ -120,3 +120,12 @@ The user asked that sign-up lead straight to the main screen instead of a "pendi
   - An already-registered email now gets `409 EMAIL_TAKEN`, because we can't log the person in as someone else. That reveals the email exists, which is accepted for an internal tool. Hashing still runs in every case.
 - **Approval mode (`SIGNUP_REQUIRES_APPROVAL=true`)** keeps the ADR-015 behaviour: pending, no session, identical answer for existing emails.
 - **Risk to watch:** any future feature that shows data to "any logged-in user" (not scoped by client membership) would expose it to self-signups. Every data route must keep going through `authorizeClientAccess`.
+
+## ADR-017 — First admin without a terminal (2026-11-21)
+
+In production the office PC may run the CRM as a service, with nobody using a shell, so `pnpm auth:create-admin` alone isn't enough. Added (the CLI stays for developers and recovery):
+
+1. **Setup page + one-time code (default).** While the DB is migrated and has no login-capable admin, the server generates a 12-character code (about 59 bits, unambiguous alphabet). It writes the code to `setup-code.txt` next to the database; **the log only names the file, never the code** (no secrets in logs). `GET /setup/status` makes the web show **הגדרה ראשונית** instead of login. `POST /setup` needs the code (hashed, constant-time compare, 10 tries per IP per 15 min), creates the admin through the same `bootstrapFirstAdmin` (which re-checks "no admin", so concurrent attempts can't both succeed) and logs them in. The file and code are then deleted and the routes answer 404. Trust model: whoever can read the server's data folder is the owner. A visitor on the LAN can't take over a fresh install, which is what makes this safer than "the first visitor becomes admin".
+2. **`INITIAL_ADMIN_EMAIL` / `INITIAL_ADMIN_PASSWORD` / `INITIAL_ADMIN_NAME`** for scripted installs: applied once at startup while no admin exists, ignored (with a warning) afterwards. An invalid value is logged (rule code only) and setup falls back to the code page instead of crashing the service. The password sits in plain text in the config, so the docs tell the operator to remove it after first start.
+
+Open point: migrations still need `pnpm db:migrate`. A no-terminal production install would also need an opt-in "migrate on startup" (with the automatic pre-migrate backup), which ADR-010 deliberately excluded. To be decided with the deployment/operations phase.

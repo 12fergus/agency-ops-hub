@@ -61,3 +61,14 @@ export function useAuthOptions() {
     staleTime: Infinity,
   });
 }
+
+export const SETUP_KEY = ['setup', 'status'] as const;
+
+/** True while the server has no admin yet → show the first-run setup page instead of login. */
+export function useSetupStatus() {
+  return useQuery({
+    queryKey: SETUP_KEY,
+    queryFn: async () => (await apiRequest<{ needsSetup: boolean }>('GET', '/setup/status')).data,
+    staleTime: Infinity,
+  });
+}

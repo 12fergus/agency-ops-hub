@@ -19,7 +19,11 @@
 
 ## Users and access
 
-- **First admin (once, on the host):** run `pnpm db:migrate`, then `pnpm auth:create-admin` in an interactive terminal on the office PC (PowerShell, or `winpty pnpm auth:create-admin` in Git Bash/mintty). It asks for the email, display name and password (typed twice, hidden). It refuses if an active admin already exists, and there is no web route for it.
+- **First admin (once) — three ways; all work only while no admin that can log in exists:**
+  1. **Setup page (normal, no terminal needed):** start the server and open the CRM in a browser. Instead of the login page it shows **הגדרה ראשונית**. Open `setup-code.txt` in the data folder on the server PC (next to the database, normally `datasetup-code.txt`; the server log says where), type that one-time code, plus your name, email and password. You are logged in as admin; the code file is deleted and the setup page disappears for good. A new code is generated on each server start until setup is done.
+  2. **Environment variables (scripted installs):** set `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_PASSWORD` (and optionally `INITIAL_ADMIN_NAME`) in the service configuration. On startup the admin is created once. **Then remove `INITIAL_ADMIN_PASSWORD` from the configuration**, because it sits there in plain text. If the password breaks the policy, the server logs why and falls back to the setup page.
+  3. **Terminal (developers / recovery):** `pnpm auth:create-admin` (interactive).
+     Demo-data admins can’t log in and don’t count. Anyone who can read the server’s data folder can complete setup, so protect that folder.
 - **Further users:** either the admin creates them on the משתמשים page (hand over the initial password in person, not by email or WhatsApp), or people sign up themselves via **הרשמה** on the login page and are logged in immediately. Self-signups are **employees with no client access** until an admin assigns them to clients. Disable unwanted accounts on the users page. `SIGNUP_REQUIRES_APPROVAL=true` makes sign-ups wait for admin approval (**אישור**), and `SELF_SIGNUP=false` hides sign-up entirely. Self-service password change is planned.
 - **Leaving employees:** disable the account (משתמשים → השבתה). All their sessions end immediately. Accounts are never deleted, so history stays attributable.
 - **Lost admin password:** there is no reset route yet. If there is a second admin, they can restore access. Otherwise contact the developer: a host-only reset CLI is planned.

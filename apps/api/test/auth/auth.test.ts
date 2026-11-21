@@ -32,6 +32,9 @@ describe('default deny', () => {
         'GET /api/v1/auth/options',
         'POST /api/v1/auth/login',
         'POST /api/v1/auth/signup',
+        // First-run setup: only active while no admin exists; POST requires the one-time code.
+        'GET /api/v1/setup/status',
+        'POST /api/v1/setup',
       ].sort(),
     );
   });
