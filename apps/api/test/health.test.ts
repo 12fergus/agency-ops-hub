@@ -38,9 +38,11 @@ describe('API skeleton', () => {
     expect(sqlite.pragma('foreign_keys', { simple: true })).toBe(1);
   });
 
-  it('unknown API routes return the error envelope', async () => {
+  it('unknown API routes require a session first (no route enumeration), in the error envelope', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/v1/nope' });
-    expect(res.statusCode).toBe(404);
-    expect(res.json()).toEqual({ error: { code: 'NOT_FOUND', message: 'Route not found' } });
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toEqual({
+      error: { code: 'UNAUTHENTICATED', message: 'Authentication required' },
+    });
   });
 });

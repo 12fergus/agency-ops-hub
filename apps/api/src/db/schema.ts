@@ -86,6 +86,12 @@ export const users = sqliteTable(
     passwordHash: text('password_hash').notNull(),
     role: text('role', { enum: USER_ROLES }).notNull(),
     isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+    /**
+     * When an admin approved the account. NULL = self-signup still pending approval.
+     * Added in 0001 as a plain nullable column (no CHECK): SQLite can only add a CHECK by
+     * rebuilding `users`, which every other table references — see ADR-015.
+     */
+    approvedAt: text('approved_at'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

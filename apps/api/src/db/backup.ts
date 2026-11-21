@@ -1,4 +1,4 @@
-import { mkdirSync, renameSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, renameSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
 
@@ -35,19 +35,33 @@ export async function backupDatabase(
     }
     return dest;
   } catch (err) {
-    quarantine(dest);
-    throw new Error(`Backup failed, no usable backup written: ${(err as Error).message}`, {
-      cause: err,
-    });
+    // Cleanup must never replace the real reason the backup failed.
+    const leftovers = quarantine(dest);
+    const reason = err instanceof Error ? err.message : String(err);
+    const note = leftovers.length
+      ? ` Could not quarantine: ${leftovers.join(', ')} — delete it manually, it is NOT a valid backup.`
+      : '';
+    throw new Error(`Backup failed, no usable backup written: ${reason}.${note}`, { cause: err });
   }
 }
 
-function quarantine(file: string): void {
+/**
+ * Moves a failed copy (and any -wal/-shm) out of the way as `*.failed`; if renaming fails it is
+ * deleted. Returns files that could be neither renamed nor deleted. Never throws.
+ */
+function quarantine(file: string): string[] {
+  const stuck: string[] = [];
   for (const f of [file, `${file}-wal`, `${file}-shm`]) {
+    if (!existsSync(f)) continue;
     try {
       renameSync(f, `${f}.failed`);
     } catch {
-      rmSync(f, { force: true });
+      try {
+        rmSync(f, { force: true });
+      } catch {
+        stuck.push(path.basename(f));
+      }
     }
   }
+  return stuck;
 }

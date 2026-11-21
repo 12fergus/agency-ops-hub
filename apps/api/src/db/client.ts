@@ -39,10 +39,15 @@ export function openDatabase(filePath: string): DbHandle {
   return { sqlite, db, filePath, close: () => sqlite.close() };
 }
 
-export function pingDatabase(sqlite: Database.Database): boolean {
+/** Health probe. Returns the failure instead of throwing, so the caller can report AND log it. */
+export function pingDatabase(
+  sqlite: Database.Database,
+): { ok: true } | { ok: false; error: unknown } {
   try {
-    return sqlite.prepare('SELECT 1 AS ok').get() !== undefined;
-  } catch {
-    return false;
+    return sqlite.prepare('SELECT 1 AS ok').get() !== undefined
+      ? { ok: true }
+      : { ok: false, error: new Error('SELECT 1 returned no row') };
+  } catch (error) {
+    return { ok: false, error };
   }
 }

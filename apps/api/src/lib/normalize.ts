@@ -67,6 +67,8 @@ export function parseTimestamp(value: string): string {
   try {
     return toUtcIso(value);
   } catch (e) {
-    throw validation((e as Error).message);
+    // Only bad INPUT becomes a 422; anything else is a bug and must surface as a 500.
+    if (e instanceof RangeError) throw validation(e.message);
+    throw e;
   }
 }

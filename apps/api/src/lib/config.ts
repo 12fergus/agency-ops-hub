@@ -12,6 +12,45 @@ const envSchema = z.object({
   DATABASE_PATH: z.string().min(1).default('data/crm.sqlite'),
   BACKUP_DIR: z.string().min(1).default('backups'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
+  /** Absolute session lifetime. */
+  SESSION_TTL_HOURS: z.coerce
+    .number()
+    .min(1)
+    .max(24 * 30)
+    .default(12),
+  /** Session ends after this much inactivity. */
+  SESSION_IDLE_MINUTES: z.coerce
+    .number()
+    .min(5)
+    .max(24 * 60)
+    .default(120),
+  /** 'auto' = Secure only when the request arrived over HTTPS (needs TRUST_PROXY behind a proxy). */
+  COOKIE_SECURE: z.enum(['auto', 'true', 'false']).default('auto'),
+  /** Set to true only when a reverse proxy on this host terminates TLS. */
+  TRUST_PROXY: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+  /** Show "sign up" on the login page (new accounts are employees with no client access). */
+  SELF_SIGNUP: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
+  /** false (default): sign-up logs straight in. true: sign-ups wait for admin approval. */
+  SIGNUP_REQUIRES_APPROVAL: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+  /** Extra allowed Origins for state-changing requests (comma-separated), besides same-origin. */
+  TRUSTED_ORIGINS: z
+    .string()
+    .default('')
+    .transform((v) =>
+      v
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+    ),
 });
 
 export type Config = z.infer<typeof envSchema> & { webDistPath: string };

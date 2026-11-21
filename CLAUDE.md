@@ -14,6 +14,7 @@ Node ≥ 24 (dev host: v26), pnpm 12. Run from repo root.
 - `pnpm db:generate` — generate migration SQL from `apps/api/src/db/schema.ts` into `apps/api/migrations/`
 - `pnpm db:migrate` — back up (if the DB exists), then apply pending migrations to `DATABASE_PATH` in one transaction; repeatable
 - `pnpm db:backup` — online backup + integrity check into `BACKUP_DIR`
+- `pnpm auth:create-admin` — interactive, host-only first-admin bootstrap (TTY; refuses if an active admin exists)
 - `pnpm db:seed:demo --confirm-demo` — fictional demo data on an empty dev DB (refused in production). Procedures: `docs/operations.md`
 - Single test: `pnpm --filter @agency-crm/api exec vitest run test/health.test.ts` (or `-t "name"`)
 - **Before reporting a task done:** `pnpm check` (lint + format + typecheck + test + build), plus `pnpm test:e2e` in UI phases. Report actual output; never claim a pass you didn't run.
@@ -30,6 +31,7 @@ Node ≥ 24 (dev host: v26), pnpm 12. Run from repo root.
 ## Rules for this codebase
 
 - Authorization is enforced in the backend on every list query and every ID lookup. Never trust a client-supplied `user_id`/`client_id` or a frontend role check.
+- API routes are private by default (onRequest hook in `app/security.ts`). Mark a route `config: { public: true }` only with a stated reason. Anything client-scoped goes through `authorizeClientAccess` / `authorizeLeadAccess` (`modules/auth/authorize.ts`); no access = 404. Handlers take the user from `actorOf(req)`, never from the request body.
 - Keep changes small and scoped to the current phase. No drive-by refactors.
 - Schema changes only through versioned migrations (`db:generate` → review SQL → `db:migrate`). Never `drizzle-kit push`, never hand-edit an applied migration.
 - Never modify the production SQLite file casually: no ad-hoc SQL, no migrations, no restores against it without an explicit user go-ahead and a verified backup first. Tests and dev use their own DB files.

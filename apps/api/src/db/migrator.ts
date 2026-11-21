@@ -9,7 +9,11 @@ import type { DbHandle } from './client.js';
 export const MIGRATIONS_DIR = path.join(REPO_ROOT, 'apps/api/migrations');
 const MIGRATIONS_TABLE = '__drizzle_migrations';
 
+/** Refused BEFORE anything ran: the database is unchanged. */
 export class MigrationDriftError extends Error {}
+
+/** Raised AFTER the migration COMMITTED: the database IS changed and has FK violations. */
+export class PostMigrationCheckError extends Error {}
 
 export interface MigrationStatus {
   available: number;
@@ -98,8 +102,8 @@ export function runMigrations(handle: DbHandle, dir = MIGRATIONS_DIR): Migration
   migrate(handle.db, { migrationsFolder: dir, migrationsTable: MIGRATIONS_TABLE });
   const fk = handle.sqlite.pragma('foreign_key_check') as unknown[];
   if (fk.length > 0) {
-    throw new Error(
-      `foreign_key_check reported ${fk.length} violation(s) after migration — restore the pre-migrate backup`,
+    throw new PostMigrationCheckError(
+      `foreign_key_check reported ${fk.length} violation(s) after the migration was committed`,
     );
   }
   return getMigrationStatus(handle, dir);

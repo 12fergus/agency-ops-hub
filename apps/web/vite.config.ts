@@ -17,7 +17,14 @@ export default defineConfig({
   },
   server: {
     host: '127.0.0.1', // dev server is never exposed on the LAN
-    proxy: { '/api': `http://127.0.0.1:${apiPort}` },
+    proxy: {
+      '/api': {
+        target: `http://127.0.0.1:${apiPort}`,
+        // Keep the browser's Host (127.0.0.1:5173) so it matches the Origin header: the API's
+        // CSRF check compares them. Vite's string shorthand would rewrite Host to :3000 → 403.
+        changeOrigin: false,
+      },
+    },
   },
   test: {
     environment: 'jsdom',

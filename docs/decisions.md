@@ -53,3 +53,70 @@ All FKs use the default `NO ACTION`. Deleting a client or user that still has hi
 The code review found no blockers. Fixed in this phase: migration drift/hash detection, stricter seed guards, quarantine of failed backups, client-scoped `updateLead`, archived-lead checks, a service-level import-batch check, PII-free audit snapshots for leads and tasks, UTC timestamp CHECKs (so `0000_init` was regenerated before it was ever applied to a real DB), pragma order and WAL verification, phone edge cases, and Win32 long paths.
 Deferred to Phase 2 (auth), because they need an authenticated actor: lookups scoped to the actor (`findLeadForActor`), NOT_FOUND instead of CROSS_CLIENT_REFERENCE for IDs the actor can't access, and a DB error mapper for constraint violations (raw SQLite errors become 409/422 envelopes).
 Accepted, documented only: `db:migrate` doesn't lock out a running server (the procedure requires stopping it), and `foreign_key_check` runs after commit.
+
+## ADR-012 — Authentication and authorization design (2026-11-21, Phase 2)
+
+- **No new dependencies.** Argon2id comes from Node's built-in `crypto.argon2` (Node ≥ 24.7). The app handles only one fixed cookie with a base64url value, so a tiny tested module (`lib/cookies.ts`) replaces `@fastify/cookie`. Rate limiting is an in-memory fixed window, which is adequate for one API process. The web app uses a 15-line hash router.
+- **Opaque server-side sessions, not JWTs.** Logout, disabling and role changes must take effect immediately, so the session lives in SQLite and the cookie carries only a random token. A database leak exposes only hashes.
+- **The user is checked on every request.** `authenticate` joins the session with the user and rejects inactive users, so disabling is immediate even if session revocation were missed.
+- **A privilege change forces a new login.** Changing a role revokes all of that user's sessions.
+- **404 when there is no access.** A non-member gets `NOT_FOUND`, identical to a non-existent id, so IDs can't be probed. `403 FORBIDDEN` is used only when the resource is visible but the action isn't allowed (e.g. an employee managing members).
+- **Who controls membership.** Only admins and the client's **owner** managers can change membership. Managers may add employees or managers as `collaborator` and remove collaborators. They can never grant `owner`, add admins, or remove owners. Admins can do everything and assign ownership.
+- **Admin lockout protection.** Admins can't disable themselves or change their own role, and the last active admin can't be demoted or disabled.
+- **CSRF.** Defence in depth: SameSite=Lax, an Origin/Referer same-host check on every state-changing request (including login), and JSON-only bodies. With these checks a same-origin JSON API needs no CSRF token. `TRUSTED_ORIGINS` covers a reverse-proxy hostname that differs from `Host`.
+- **Secure cookie flag.** `COOKIE_SECURE=auto` sets Secure when the request arrived over HTTPS; behind a TLS-terminating proxy, set `TRUST_PROXY=true`. No `__Host-` prefix yet, because the office LAN may start on plain HTTP. Revisit once TLS is mandatory.
+- **First admin.** Created only by the host CLI: interactive (TTY), hidden password typed twice, refused once an active admin exists. There is no HTTP bootstrap route, so "the first visitor becomes admin" can't happen.
+- **Unknown API routes return 401 when unauthenticated**, because the default-deny hook runs before the 404 handler.
+
+## ADR-013 — Phase 2 review outcomes (2026-11-21)
+
+The code review found no blockers. Fixed:
+
+- **The security hook decides on the router's view.** It now checks the matched route pattern, or the percent-decoded path for 404s, instead of `req.url`. Before, `/%61pi/v1/...` reached API handlers while skipping the Origin check and default-deny. Each handler's own `actorOf()` still blocked reads, but a forged cross-origin logout succeeded. A regression test covers it.
+- **Login counters are incremented before the async password check**, so parallel guesses can't exceed 5 per account.
+- **`trustProxy: 'loopback'`** instead of `true`, so client-forged `X-Forwarded-For` can't rotate the per-IP limiter key.
+- **The rate limiter's memory is hard-capped** (expired entries go first, then the oldest).
+- **Nits fixed:**
+  - accounts with placeholder hashes now go through the dummy Argon2 run (no timing oracle);
+  - login re-checks the user inside the transaction (disabled or password changed mid-login → no session);
+  - 5xx responses always use code `INTERNAL`;
+  - the CLI swallows arrow-key escape sequences and no longer prints the email.
+
+Accepted:
+
+- A lockout on one account can affect its real owner (documented in operations.md).
+- Admins may leave a client with no owner, so only admins can manage its members.
+- Concurrent first-admin bootstraps could create two admins, which is negligible for a host-only CLI.
+- `Origin` is compared to `Host`; a proxy that rewrites Host needs `TRUSTED_ORIGINS`.
+- No `__Host-` cookie prefix until HTTPS is mandatory.
+
+## ADR-014 — Password policy: 8+ with letter, digit and symbol (2026-11-21)
+
+The user asked for 6 characters with special symbols. We agreed on **8–256 characters with at least one letter (any script, Hebrew included), one digit and one symbol**, no leading or trailing space, and not containing the email's name part.
+
+- Six characters is below every mainstream minimum. Current NIST/OWASP guidance prefers length over composition rules, so 8 + composition is a compromise, accepted given the login rate limit and Argon2id.
+- The rules live in one place (`packages/shared/src/password-policy.ts`). The API enforces them and the web form shows the same checklist live, so the two cannot disagree. The API answers `422 VALIDATION` with the specific rule code; the UI maps it to Hebrew.
+- The policy applies when a password is set. Existing passwords, such as the first admin's, keep working.
+- Deferred (progress.md items 7–8): email codes (2FA or one-time verification) and Google sign-in. Both are external integrations that need provider decisions, internet access and, for Google, HTTPS on a real domain.
+
+## ADR-015 — Self-signup with admin approval (2026-11-21)
+
+The user asked for a sign-up button on the login page. Because anyone on the office LAN can open that page, sign-ups are **pending until an admin approves them**:
+
+- A sign-up creates `role=employee, is_active=0, approved_at=NULL`. It can't log in, and login gives the same generic error as a wrong password. It also has no client memberships, so after approval it still sees no client data until it is assigned.
+- **Approval** = `POST /users/:id/enable`, which sets `approved_at` and activates the account. `status` is derived: active / pending (inactive and never approved) / disabled (inactive and approved before).
+- **No enumeration:** signing up with an existing email returns the same 202 and changes nothing. A password hash is computed either way, so timing matches.
+- Rate limit: 5 sign-ups per IP per hour. `SELF_SIGNUP=false` hides the button and makes the route 404. `GET /auth/options` tells the UI.
+- **Migration 0001** adds `users.approved_at` as a plain nullable column and backfills existing users as approved. It has no CHECK constraint on purpose: in SQLite, adding a CHECK means rebuilding `users`, which every table references, and with FKs enforced inside the migration transaction that rebuild would fail (see operations.md → Schema changes). The format is guaranteed by the app (`nowIso()`).
+- The public-route test now pins the exact list of public routes, so making a route public needs a deliberate test change.
+
+## ADR-016 — Sign-up logs in immediately (approval optional) (2026-11-21)
+
+The user asked that sign-up lead straight to the main screen instead of a "pending approval" message, which supersedes the default in ADR-015.
+
+- **Default (`SIGNUP_REQUIRES_APPROVAL=false`):** a sign-up creates an active, approved **employee with no client memberships** and starts a session in the same transaction (the same `startSession` as login: fresh token, audited as `auth.signup_login`). Authorization is membership-based, so the new user sees no client or lead data and no admin pages until an admin assigns them.
+- **Accepted trade-offs:**
+  - Anyone on the LAN can create an account; it is rate-limited, and unwanted accounts can be disabled.
+  - An already-registered email now gets `409 EMAIL_TAKEN`, because we can't log the person in as someone else. That reveals the email exists, which is accepted for an internal tool. Hashing still runs in every case.
+- **Approval mode (`SIGNUP_REQUIRES_APPROVAL=true`)** keeps the ADR-015 behaviour: pending, no session, identical answer for existing emails.
+- **Risk to watch:** any future feature that shows data to "any logged-in user" (not scoped by client membership) would expose it to self-signups. Every data route must keep going through `authorizeClientAccess`.
