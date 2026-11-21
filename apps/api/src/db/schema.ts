@@ -50,7 +50,8 @@ export const ACTIVITY_TYPES = [
   'meeting',
   'stage_change',
 ] as const;
-export const TASK_STATUSES = ['open', 'done', 'cancelled'] as const;
+export const TASK_STATUSES = ['open', 'in_progress', 'done', 'cancelled'] as const;
+export const COMMUNICATION_TYPES = ['call', 'whatsapp', 'meeting', 'email', 'note'] as const;
 
 /** Constant-only IN list for CHECK constraints (values are compile-time literals, never input). */
 const inList = (column: string, values: readonly string[]) =>
@@ -242,6 +243,8 @@ export const clientContacts = sqliteTable(
   (t) => [
     ...utcTimestampChecks('client_contacts', ['created_at', 'updated_at']),
     index('client_contacts_client_idx').on(t.clientId),
+    // Target of the (contact_id, client_id) FK from client_communications: same-client contacts.
+    uniqueIndex('client_contacts_id_client_unique').on(t.id, t.clientId),
     uniqueIndex('client_contacts_one_primary')
       .on(t.clientId)
       .where(sql`is_primary = 1`),
@@ -446,6 +449,41 @@ export const leadActivities = sqliteTable(
   ],
 );
 
+// ---------- client communication log (Phase 4) ----------
+export const clientCommunications = sqliteTable(
+  'client_communications',
+  {
+    id: id(),
+    clientId: text('client_id')
+      .notNull()
+      .references(() => clients.id),
+    /** Optional contact person; the composite FK guarantees it belongs to the same client. */
+    contactId: text('contact_id'),
+    authorUserId: text('author_user_id')
+      .notNull()
+      .references(() => users.id),
+    type: text('type', { enum: COMMUNICATION_TYPES }).notNull(),
+    occurredAt: text('occurred_at').notNull(),
+    summary: text('summary').notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    ...utcTimestampChecks('client_communications', ['occurred_at', 'created_at', 'updated_at']),
+    foreignKey({
+      name: 'client_communications_contact_same_client_fk',
+      columns: [t.contactId, t.clientId],
+      foreignColumns: [clientContacts.id, clientContacts.clientId],
+    }),
+    // Target of the (communication_id, client_id) FK from tasks.
+    uniqueIndex('client_communications_id_client_unique').on(t.id, t.clientId),
+    index('client_communications_client_occurred_idx').on(t.clientId, t.occurredAt),
+    index('client_communications_contact_idx').on(t.contactId),
+    check('client_communications_type_valid', inList('type', COMMUNICATION_TYPES)),
+    check('client_communications_summary_len', sql.raw('length(summary) BETWEEN 1 AND 5000')),
+  ],
+);
+
 // ---------- tasks ----------
 export const tasks = sqliteTable(
   'tasks',
@@ -458,6 +496,10 @@ export const tasks = sqliteTable(
     assignedUserId: text('assigned_user_id')
       .notNull()
       .references(() => users.id),
+    /** Who created it (null for tasks created before Phase 4 / by system jobs). */
+    createdByUserId: text('created_by_user_id').references(() => users.id),
+    /** The communication record this follow-up task was created from ("נוצרה מתוך"). */
+    communicationId: text('communication_id'),
     title: text('title').notNull(),
     description: text('description'),
     dueAt: text('due_at'),
@@ -473,6 +515,12 @@ export const tasks = sqliteTable(
       columns: [t.leadId, t.clientId],
       foreignColumns: [leads.id, leads.clientId],
     }),
+    foreignKey({
+      name: 'tasks_communication_same_client_fk',
+      columns: [t.communicationId, t.clientId],
+      foreignColumns: [clientCommunications.id, clientCommunications.clientId],
+    }),
+    index('tasks_communication_idx').on(t.communicationId),
     index('tasks_assignee_status_due_idx').on(t.assignedUserId, t.status, t.dueAt),
     index('tasks_client_status_due_idx').on(t.clientId, t.status, t.dueAt),
     index('tasks_lead_idx').on(t.leadId),
@@ -518,6 +566,7 @@ export const auditEvents = sqliteTable(
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Session = typeof sessions.$inferSelect;
+export type ClientCommunication = typeof clientCommunications.$inferSelect;
 export type Client = typeof clients.$inferSelect;
 export type ClientStatusRow = typeof clientStatuses.$inferSelect;
 export type NewClient = typeof clients.$inferInsert;

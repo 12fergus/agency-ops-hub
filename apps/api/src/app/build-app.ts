@@ -9,10 +9,12 @@ import { AppError, errorBody } from '../lib/errors.js';
 import { authRoutes } from '../modules/auth/routes.js';
 import { clientStatusRoutes } from '../modules/client-statuses/routes.js';
 import { clientRoutes } from '../modules/clients/routes.js';
+import { communicationRoutes } from '../modules/communications/routes.js';
 import { healthRoutes } from '../modules/health/routes.js';
 import { leadRoutes } from '../modules/leads/routes.js';
 import { FirstRunSetup } from '../modules/setup/first-run.js';
 import { setupRoutes } from '../modules/setup/routes.js';
+import { taskRoutes } from '../modules/tasks/routes.js';
 import { userRoutes } from '../modules/users/routes.js';
 import { registerSecurity } from './security.js';
 
@@ -112,6 +114,8 @@ export async function buildApp(config: Config): Promise<FastifyInstance> {
       await api.register(userRoutes);
       await api.register(clientRoutes, { config });
       await api.register(clientStatusRoutes);
+      await api.register(communicationRoutes);
+      await api.register(taskRoutes);
       await api.register(leadRoutes);
     },
     { prefix: API_PREFIX },

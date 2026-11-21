@@ -56,9 +56,23 @@ Done:
 - Added on request (ADR-019): **admin-defined client statuses** with colors (settings page הגדרות; filter + sort by admin order; migration 0002 seeds פעיל/לא פעיל/מושהה), **workers create clients and edit assigned ones** (creator auto-assigned), **client photo/logo upload** (PNG/JPEG/WebP ≤ 2 MB, content-sniffed; new dependency `@fastify/multipart`)
 - Review + browser-check fixes: archived clients read-only on every write path, drawer focus stability, page clamp, accessible inline confirmations, formatting-insensitive phone search, 401-mid-session no longer hangs on the loader
 
-## Proposed next phases
+## Phase 4 — communication log + tasks (2026-11-21, branch `phase-4-comms-tasks`)
 
-- **Phase 4 (agreed 2026-11-21): client communication log + tasks.** Record calls / WhatsApp / meetings / notes per client; **"צור משימת המשך"** creates a follow-up task from a record (title, assignee, deadline) that stays linked to the record that created it; task list with overdue queue.
+- **Communication log** on the client page:
+  - types: call, WhatsApp, meeting, email, note;
+  - each record has a time (entered as Israel time), a summary and an optional contact person;
+  - records list newest first with the author.
+  - Members create records; the author or an admin edits them.
+- **"צור משימת המשך"** on every record opens the task drawer with the record as context. The task stays linked both ways: the record lists its follow-up tasks, and the task shows "נוצרה מתוך: שיחה מ־…".
+- **Tasks:**
+  - statuses פתוחה → בטיפול → הושלמה / בוטלה (fixed, ADR-020);
+  - an assignee: anyone with access to the client;
+  - a deadline, with "באיחור" computed by the server.
+  - The **משימות** page shows my queue by default, with filters for scope, status, overdue and search; the status can be changed inline. Each client page also has a tasks section.
+- **Migration 0003:** a new table, plus a `tasks` rebuild that keeps existing rows.
+- **No new dependencies.**
+
+## Proposed next phases
 
 1. ~~Auth & users~~ (Phase 2)
 2. ~~Clients~~ (Phase 3)

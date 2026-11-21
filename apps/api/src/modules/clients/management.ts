@@ -8,6 +8,7 @@ import {
   users,
   type Client,
   type ClientContact,
+  clientCommunications,
 } from '../../db/schema.js';
 import { withTransaction, type Executor } from '../../db/tx.js';
 import { invalidState, notFound } from '../../lib/errors.js';
@@ -171,7 +172,8 @@ export function listContactsAsActor(exec: Executor, actor: Actor, clientId: stri
     .map(toContactDto);
 }
 
-function requireEditableClient(tx: Executor, actor: Actor, clientId: string): Client {
+/** Member (or admin) of a NON-archived client — the guard for every client-scoped write. */
+export function requireEditableClient(tx: Executor, actor: Actor, clientId: string): Client {
   const { client } = authorizeClientAccess(tx, actor, clientId, 'client:edit');
   if (client.archivedAt) throw invalidState('Client is archived');
   return client;
@@ -268,6 +270,11 @@ export function deleteContactAsActor(
   withTransaction(exec, (tx) => {
     requireEditableClient(tx, actor, clientId);
     findContactInClient(tx, clientId, contactId);
+    // Communication records keep their history; they just no longer name this contact.
+    tx.update(clientCommunications)
+      .set({ contactId: null })
+      .where(eq(clientCommunications.contactId, contactId))
+      .run();
     tx.delete(clientContacts).where(eq(clientContacts.id, contactId)).run();
     recordAudit(tx, {
       actorUserId: actor.id,

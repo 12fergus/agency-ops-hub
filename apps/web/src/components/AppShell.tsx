@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import type { UserDto } from '@agency-crm/shared';
 import { t, type MessageKey } from '@/lib/i18n';
 
-const COMING_SOON: MessageKey[] = ['nav.dashboard', 'nav.leads', 'nav.tasks', 'nav.campaigns'];
+const COMING_SOON: MessageKey[] = ['nav.dashboard', 'nav.leads', 'nav.campaigns'];
 
 interface Props {
   user: UserDto;
@@ -46,6 +46,7 @@ export function AppShell({ user, route, onNavigate, onLogout, children }: Props)
           <ul className="space-y-1 px-2">
             {link('', 'nav.home')}
             {link('clients', 'nav.clients')}
+            {link('tasks', 'nav.tasks')}
             {user.role === 'admin' && link('users', 'nav.users')}
             {user.role === 'admin' && link('settings', 'nav.settings')}
             {COMING_SOON.map((key) => (

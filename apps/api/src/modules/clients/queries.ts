@@ -33,8 +33,9 @@ const SORT_COLUMNS = {
   createdAt: clients.createdAt,
 } as const satisfies Record<ClientSortField, unknown>;
 
-/** Escapes LIKE wildcards so user input is matched literally. */
-const likePattern = (q: string) => `%${q.toLowerCase().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+/** Case-insensitive LIKE pattern matching `q` literally (use with ESCAPE '\'). */
+export const likePattern = (q: string) =>
+  `%${q.toLowerCase().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 
 export interface ClientListParams {
   page: number;

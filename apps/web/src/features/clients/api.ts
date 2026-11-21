@@ -106,6 +106,7 @@ export function useSaveClient() {
 
 export function useArchiveClient() {
   const invalidate = useInvalidateClient();
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async (args: { id: string; archived: boolean }) =>
       (
@@ -114,7 +115,13 @@ export function useArchiveClient() {
           `/clients/${seg(args.id)}/${args.archived ? 'archive' : 'unarchive'}`,
         )
       ).data,
-    onSuccess: (client) => invalidate(client.id),
+    // Archiving makes the client's log and tasks read-only (canEdit flags), so refresh them too.
+    onSuccess: (client) =>
+      Promise.all([
+        invalidate(client.id),
+        qc.invalidateQueries({ queryKey: ['communications'] }),
+        qc.invalidateQueries({ queryKey: ['tasks'] }),
+      ]),
   });
 }
 

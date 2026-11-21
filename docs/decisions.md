@@ -187,3 +187,31 @@ Requested by the user during Phase 3:
 - **Status counts are admin-only.** For everyone else `clientCount` is null, since the counts span clients they can't see.
 - **Versioned photo URLs** may be cached privately for 1 day; all other API responses stay `no-store`.
 - **Smaller fixes:** docs and comments brought up to date (schema, multipart CSRF note); the avatar retries after a new upload; status counts refresh after client changes; a failed reorder reloads the list; a 0002 backfill test was added.
+
+## ADR-020 — Communication log and follow-up tasks (2026-11-21, Phase 4)
+
+- **Communication records are history.** Any member or admin may add one. Only the **author or an admin** may edit it, and nobody deletes it. A record keeps its author, and its `summary` is free text about real people, so the summary stays **out of the audit log**; only the type, time and contact id are recorded. Deleting a contact clears it from the records instead of blocking the delete.
+- **"צור משימת המשך"** is an ordinary task with `communication_id`. A composite FK guarantees the same client in the DB, and the service returns a field error (422) for a record of another client, so nobody can probe ids. Tasks are listed on their record, and each task shows "נוצרה מתוך".
+- **Task statuses are fixed:** `open → in_progress → done`, plus `cancelled` (chosen by the user). Overdue = a deadline in the past while `open` / `in_progress`, computed by the server at read time. Tasks are never deleted: cancel instead.
+- **Who may assign:** any member of the client (or an admin) may create or edit tasks and assign them to **anyone with access to that client**, e.g. a campaign manager assigning a designer (chosen by the user). The assignee is validated on the server on every create and reassign.
+- **Visibility:**
+  - Non-admins see only tasks of clients they are members of, including tasks assigned to them. If someone is removed from a client, its tasks disappear from their queue and stay with the client; reassign them from the client page.
+  - Archived clients' tasks stay readable but leave the active queue and are read-only (409).
+- **Times:** forms enter Israel time (Asia/Jerusalem) whatever the computer's own time zone is (`lib/datetime.ts`, tested for summer and winter time). Times are stored as UTC.
+- **Migration 0003:** drizzle-kit generated a table rebuild that copied the two _new_ columns from the old table, which would have failed. This was fixed by hand **before the first apply** (copy NULL), and a test proves existing tasks survive.
+
+**ADR-020 review outcomes (2026-11-21):** no blockers.
+
+- **Assignee check:** only a _change_ of assignee is validated, so a task whose assignee was deactivated can still be edited. Tested.
+- **Archived clients:** their tasks are never flagged overdue. Follow-up tasks inside a record now show their overdue state. Archived = read-only (409) remains intentional.
+- **Accessible names:** record buttons include the author, so they stay unique even for two records of the same type in the same minute.
+- **Deferred:**
+  - no upper bound on future `occurredAt`;
+  - when someone is removed from a client, their tasks aren't reassigned automatically (documented above).
+
+**Phase 4 browser-check outcomes (2026-11-21):**
+
+- **Archiving now refreshes the communication and task views,** so they become read-only right away instead of after a reload. Covered by e2e.
+- **A client's own task section** keeps showing its tasks after archiving (read-only). Only the personal "active" queue hides archived clients. Tested.
+- **"נוצרה מתוך"** isolates the date as left-to-right inside the Hebrew sentence.
+- **Not reproduced:** two session drops seen while one Chrome profile switched between test accounts. Logging in as another user ends the previous session by design, and logging out clears the shared cookie; no code path revokes sessions otherwise.

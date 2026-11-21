@@ -103,3 +103,18 @@ Indexes: `(assigned_user_id, status, due_at)` for "my overdue work", `(client_id
 ### Not in this migration
 
 `ingestion_events` (P1 webhooks) arrives with the webhook phase.
+
+### client_communications (0003)
+
+`id`, `client_id`, `contact_id` (nullable), `author_user_id`, `type` (`call|whatsapp|meeting|email|note`), `occurred_at` (UTC), `summary` (1–5000), timestamps.
+
+- **Composite FK** `(contact_id, client_id)` → `client_contacts(id, client_id)`, so the contact always belongs to the same client. It is backed by the new unique index `client_contacts_id_client_unique`.
+- **Deleting a contact** clears `contact_id` on its records; the records themselves stay.
+- **Indexes:** `(client_id, occurred_at)`, `contact_id`, and unique `(id, client_id)`, which is the target of the task FK.
+
+### tasks (rebuilt in 0003)
+
+- **New columns:** `created_by_user_id` → users (nullable; NULL for older tasks), `communication_id` (nullable).
+- **Link to a record:** composite FK `(communication_id, client_id)` → `client_communications(id, client_id)`, so a follow-up task always belongs to the record's client.
+- **Status** CHECK: `open|in_progress|done|cancelled`. CHECK: `status = 'done'` ⇔ `completed_at IS NOT NULL`.
+- **Migration 0003** rebuilds the table (SQLite can't alter a CHECK in place) and keeps every existing row, covered by a test. Nothing references `tasks`, so the rebuild runs safely inside the migration transaction.

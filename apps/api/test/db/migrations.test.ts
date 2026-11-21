@@ -15,6 +15,7 @@ import { tempDir } from '../helpers/db.js';
 const EXPECTED_TABLES = [
   'audit_events',
   'campaigns',
+  'client_communications',
   'client_contacts',
   'client_members',
   'client_statuses',
@@ -226,6 +227,91 @@ describe('migration 0002 backfill (custom statuses)', () => {
         { id: 'x', status: 'archived', statusName: 'פעיל' }, // lifecycle kept
       ]);
       expect(handle.sqlite.pragma('foreign_key_check')).toEqual([]);
+    } finally {
+      handle.close();
+      t.cleanup();
+    }
+  });
+});
+
+describe('migration 0003 (communications + tasks rebuild)', () => {
+  it('keeps existing tasks (new columns NULL) and then allows in_progress + links', () => {
+    const t = tempDir();
+    const dir = path.join(t.dir, 'migrations');
+    cpSync(MIGRATIONS_DIR, dir, { recursive: true });
+    const journalFile = path.join(dir, 'meta/_journal.json');
+    const full = readFileSync(journalFile, 'utf8');
+    const journal = JSON.parse(full);
+    writeFileSync(
+      journalFile,
+      JSON.stringify({ ...journal, entries: journal.entries.slice(0, 3) }),
+    );
+
+    const handle = openDatabase(':memory:');
+    try {
+      runMigrations(handle, dir); // up to 0002
+      const s = handle.sqlite;
+      s.prepare(
+        "INSERT INTO users (id, email, display_name, password_hash, role) VALUES ('u', 'u@x.test', 'U', 'h', 'employee')",
+      ).run();
+      s.prepare("INSERT INTO clients (id, name) VALUES ('c', 'Client')").run();
+      s.prepare(
+        "INSERT INTO tasks (id, client_id, assigned_user_id, title, status, completed_at, due_at) VALUES ('t1', 'c', 'u', 'Open one', 'open', NULL, '2026-12-01T09:00:00.000Z'), ('t2', 'c', 'u', 'Done one', 'done', '2026-11-01T09:00:00.000Z', NULL)",
+      ).run();
+
+      writeFileSync(journalFile, full); // now 0003 arrives
+      runMigrations(handle, dir);
+
+      expect(
+        s
+          .prepare(
+            'SELECT id, title, status, due_at, completed_at, created_by_user_id, communication_id FROM tasks ORDER BY id',
+          )
+          .all(),
+      ).toEqual([
+        {
+          id: 't1',
+          title: 'Open one',
+          status: 'open',
+          due_at: '2026-12-01T09:00:00.000Z',
+          completed_at: null,
+          created_by_user_id: null,
+          communication_id: null,
+        },
+        {
+          id: 't2',
+          title: 'Done one',
+          status: 'done',
+          due_at: null,
+          completed_at: '2026-11-01T09:00:00.000Z',
+          created_by_user_id: null,
+          communication_id: null,
+        },
+      ]);
+      // New status + a same-client communication link work; a cross-client link is rejected.
+      s.prepare(
+        "INSERT INTO client_communications (id, client_id, author_user_id, type, occurred_at, summary) VALUES ('m', 'c', 'u', 'call', '2026-11-23T08:00:00.000Z', 'x')",
+      ).run();
+      s.prepare(
+        "UPDATE tasks SET status = 'in_progress', communication_id = 'm' WHERE id = 't1'",
+      ).run();
+      s.prepare("INSERT INTO clients (id, name) VALUES ('c2', 'Other')").run();
+      expect(() => s.prepare("UPDATE tasks SET client_id = 'c2' WHERE id = 't1'").run()).toThrow(
+        /FOREIGN KEY/,
+      );
+      expect(s.pragma('foreign_key_check')).toEqual([]);
+      // Indexes survived the rebuild.
+      const idx = s
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'tasks' AND name NOT LIKE 'sqlite_%'",
+        )
+        .all();
+      expect(idx.map((r) => (r as { name: string }).name).sort()).toEqual([
+        'tasks_assignee_status_due_idx',
+        'tasks_client_status_due_idx',
+        'tasks_communication_idx',
+        'tasks_lead_idx',
+      ]);
     } finally {
       handle.close();
       t.cleanup();

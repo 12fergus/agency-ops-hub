@@ -8,6 +8,7 @@ import { SystemStatus } from '@/features/system/SystemStatus';
 import { UsersPage } from '@/features/users/UsersPage';
 import { ClientDetailPage } from '@/features/clients/ClientDetailPage';
 import { ClientsPage } from '@/features/clients/ClientsPage';
+import { TasksPage } from '@/features/work/TasksPage';
 import { StatusesSettings } from '@/features/client-statuses/StatusesSettings';
 import { errorMessage } from '@/lib/api';
 import { t } from '@/lib/i18n';
@@ -56,6 +57,7 @@ export function App() {
         <ClientDetailPage key={param} id={param} user={user} onBack={() => navigate('clients')} />
       );
     }
+    if (section === 'tasks') return <TasksPage user={user} onOpenClient={openClient} />;
     if (section === 'clients') {
       return <ClientsPage user={user} onOpen={openClient} />;
     }

@@ -10,6 +10,8 @@ import { ContactsSection } from './ContactsSection';
 import { StaffSection } from './StaffSection';
 import { PhotoBlock } from './PhotoBlock';
 import { StatusBadge } from './StatusBadge';
+import { ClientTasksSection } from '@/features/work/ClientTasksSection';
+import { CommunicationsSection } from '@/features/work/CommunicationsSection';
 
 const ltr = (v: string | null) => (v ? <span dir="ltr">{v}</span> : t('common.none'));
 
@@ -168,6 +170,10 @@ export function ClientDetailPage({
         <ContactsSection clientId={c.id} canManage={c.permissions.canManageContacts} />
         <StaffSection clientId={c.id} canManage={c.permissions.canManageStaff} actor={user} />
       </div>
+
+      {/* canEdit = member/admin of a non-archived client: may log communications and add tasks. */}
+      <CommunicationsSection clientId={c.id} canWrite={c.permissions.canEdit} actor={user} />
+      <ClientTasksSection clientId={c.id} canWrite={c.permissions.canEdit} actor={user} />
 
       <Drawer open={editing} title={t('clients.editTitle')} onClose={() => setEditing(false)}>
         <ClientForm client={c} onSaved={() => setEditing(false)} />
