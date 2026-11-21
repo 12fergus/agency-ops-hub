@@ -15,6 +15,13 @@
       "when": 1795250733471,
       "tag": "0001_user_approval",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1795263238303,
+      "tag": "0002_client_statuses_photo",
+      "breakpoints": true
     }
   ]
 }

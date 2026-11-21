@@ -67,8 +67,9 @@ export function isAllowedOrigin(config: Config, req: FastifyRequest): boolean {
 export function registerSecurity(app: FastifyInstance, config: Config): void {
   const policy = sessionPolicy(config);
 
-  // JSON is the only accepted body type: form/text posts (the "simple requests" a malicious site
-  // can send without a CORS preflight) get 415.
+  // Accepted bodies: JSON, and multipart ONLY for photo uploads. Form-urlencoded/text posts get
+  // 415. Multipart is a "simple request" a foreign site could send, so for it the Origin check
+  // below (plus SameSite=Lax) is the CSRF defence — it runs before any body is parsed.
   app.removeContentTypeParser('text/plain');
 
   app.decorateRequest('actor', null);
@@ -95,7 +96,9 @@ export function registerSecurity(app: FastifyInstance, config: Config): void {
 
   app.addHook('onSend', async (req, reply) => {
     for (const [k, v] of Object.entries(SECURITY_HEADERS)) reply.header(k, v);
-    if (isApiRequest(req)) reply.header('cache-control', 'no-store');
+    // API data is never cached — unless a route deliberately set its own policy (versioned photos).
+    if (isApiRequest(req) && !reply.hasHeader('cache-control'))
+      reply.header('cache-control', 'no-store');
   });
 }
 

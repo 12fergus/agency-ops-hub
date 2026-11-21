@@ -49,6 +49,8 @@
 
 ## Backups
 
+> **Client photos are files, not database rows.** They live in `UPLOADS_DIR` (default: `uploads` next to the database, e.g. `data\uploads\clients`). `pnpm db:backup` backs up **only the database**. Until the Operations phase adds a combined backup, copy the `uploads` folder together with each database backup (e.g. in the same nightly job). Restoring the DB without the photos only shows initials instead of the pictures; nothing breaks.
+
 - **Schedule:** at least daily, plus before every migration or upgrade. Windows Task Scheduler → `pnpm db:backup` in the repo directory (the scheduled job lands with the Operations phase).
 - **Location:** `BACKUP_DIR` (default `backups/`, gitignored). Also copy to a **different physical disk or machine** (USB/NAS/offsite). A backup on the same disk doesn't survive a disk failure.
 - **Protection:** backups contain lead PII. Restrict folder permissions to the admin account. Encrypt copies that leave the host (e.g. BitLocker on the external drive, or 7-Zip AES-256).

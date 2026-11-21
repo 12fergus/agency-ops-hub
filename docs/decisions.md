@@ -129,3 +129,61 @@ In production the office PC may run the CRM as a service, with nobody using a sh
 2. **`INITIAL_ADMIN_EMAIL` / `INITIAL_ADMIN_PASSWORD` / `INITIAL_ADMIN_NAME`** for scripted installs: applied once at startup while no admin exists, ignored (with a warning) afterwards. An invalid value is logged (rule code only) and setup falls back to the code page instead of crashing the service. The password sits in plain text in the config, so the docs tell the operator to remove it after first start.
 
 Open point: migrations still need `pnpm db:migrate`. A no-terminal production install would also need an opt-in "migrate on startup" (with the automatic pre-migrate backup), which ADR-010 deliberately excluded. To be decided with the deployment/operations phase.
+
+## ADR-018 — Clients module rules (2026-11-21, Phase 3)
+
+- **Who may do what:**
+  - **Admins** create clients and can do everything.
+  - **Owner-managers** edit their client's details and contacts, and add or remove collaborators.
+  - **Collaborators and employees** read only.
+  - **Archive/unarchive** is admin-only.
+  - Non-members get 404 everywhere.
+  - Each client response carries the actor's `permissions` (computed by the same rules), so the UI shows exactly what the server allows. The server still re-checks every call.
+- **Archive, not delete:** archiving sets `status='archived'` + `archived_at` and keeps all members, contacts, leads and history. Archived clients drop out of the default list (`status=current`) and are read-only (409) until unarchived. There is no client DELETE route.
+- **Contacts may be deleted:** they are reference data without history; audit records the deletion (without contact PII).
+- **PATCH schemas have no defaults.** Zod keeps a field's `.default()` through `.partial()`, so a PATCH schema derived from the create schema silently reset omitted fields (a paused client back to active, a primary contact to non-primary). Field rules now live in a defaults-free base; create adds defaults, PATCH uses `.partial()` of the base. A regression test covers it.
+- **Listing:** scoping is part of the SQL (`IN (memberships)`), never a post-filter, so totals and pages are correct. Sort only via an allowlist map. Search uses `LIKE … ESCAPE` with escaped user wildcards. Page size is at most 100.
+- **TanStack Table v9** (`@tanstack/react-table` 9.3.1, named in the spec): `useTable` with `rowSortingFeature` + `rowPaginationFeature`, `manualSorting`/`manualPagination` (the server owns both), and controlled state in React. Query data goes straight into the table with no copy into state.
+- **UI patterns:** an accessible drawer (dialog, focus moves to the first field and returns to the opener, focus trap, Escape), in-page confirmations instead of `window.confirm` (browser dialogs also break automated checks), and hash routes `#/clients` and `#/clients/<id>`.
+
+**Phase 3 review outcomes (2026-11-21):**
+
+- **Fixed (blocker):** staff add/remove on an **archived** client was still accepted, contradicting `canManageStaff:false`. Every write path (details, contacts, staff) now refuses archived clients with 409. A regression test covers all six write routes for admin and owner.
+- **Fixed:**
+  - the drawer focus effect re-ran on parent re-renders and stole focus mid-typing (`onClose` is now kept in a ref);
+  - the list snaps back when the current page is past the last one;
+  - inline confirmations support Escape, return focus to their trigger, and name their target in the Yes/No labels;
+  - "page X of Y" is one translated sentence;
+  - phone search ignores formatting (`0501234567` finds `050-123-4567`);
+  - ids are URL-encoded in API paths;
+  - a duplicate staff query was removed.
+- **Accepted (by design):**
+  - **Unarchive restores the lifecycle to `active`.** Since ADR-019 the business status (`status_id`, e.g. מושהה) is separate and **is kept** through archive and unarchive; only the archived flag changes. The audit log records the before and after.
+  - **Admins may remove a client's last owner.** The client then has no owner-manager, so only admins can edit it until a new owner is assigned.
+  - **The count and the page are read in two statements, outside a transaction.** Under concurrent writes the total can be off by one for a moment, which is acceptable for a list view.
+
+## ADR-019 — Custom client statuses, workers edit/create, client photos (2026-11-21, Phase 3)
+
+Requested by the user during Phase 3:
+
+- **Statuses are admin-defined** (`client_statuses`: name, palette color, position, one default). Every client has one (`clients.status_id`); new clients get the default. Lists filter by it and sort by the admin's order (`position`). The old `clients.status` column now only marks the **lifecycle** (archived or not), and its existing CHECK constraints still hold. Former "paused" clients became the מושהה status in migration 0002 (additive columns plus a backfill, with no table rebuild). Colors are a fixed palette mapped to vetted classes, never free CSS. The UI always shows the status name, so color is never the only cue.
+- **Statuses in use, or the default status, can't be deleted**, so every client always has a valid status.
+- **Workers:**
+  - **Any role may create a client.** A non-admin creator is assigned automatically: managers as **owner**, employees as collaborator.
+  - **Any assigned member may edit** details, status, contacts and photo.
+  - Staff management (admins and owner-managers) and archive (admins) are unchanged.
+  - Risk accepted with ADR-016's instant sign-up: anyone on the LAN can create clients. They only ever see their own, and admins see everything and can archive.
+- **Photos:**
+  - **Upload:** `@fastify/multipart` (approved dependency) with hard limits (1 file, 2 MB, no extra fields or parts).
+  - **Type check:** by magic bytes (PNG, JPEG, WebP only; SVG is rejected because it is scriptable).
+  - **Storage:** `<UPLOADS_DIR>/clients/<clientId>.<ext>`, written to a temp file and then renamed.
+  - **Serving:** through an authorized route with the sniffed MIME type, `nosniff` and `no-store`.
+  - **Open point:** `db:backup` doesn't include uploads yet (operations.md). Combine them in the Operations phase.
+- **Browser-check fix:** a 401 during use removed the first-run-setup query, so the app hung on "טוען…". App-state queries (`auth`, `setup`) now survive cache clears, with a regression test.
+
+**ADR-019 review outcomes (2026-11-21):** no blockers.
+
+- **Photo save order:** temp file, then the DB commit, then the file swap. A failed DB update now keeps the current photo and leaves no temp file; tested with a simulated failure.
+- **Status counts are admin-only.** For everyone else `clientCount` is null, since the counts span clients they can't see.
+- **Versioned photo URLs** may be cached privately for 1 day; all other API responses stay `no-store`.
+- **Smaller fixes:** docs and comments brought up to date (schema, multipart CSRF note); the avatar retries after a new upload; status counts refresh after client changes; a failed reorder reloads the list; a 0002 backfill test was added.

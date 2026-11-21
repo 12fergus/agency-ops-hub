@@ -1,11 +1,13 @@
 import { existsSync } from 'node:fs';
 import Fastify, { type FastifyError, type FastifyInstance } from 'fastify';
+import fastifyMultipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
-import { API_PREFIX } from '@agency-crm/shared';
+import { API_PREFIX, PHOTO_MAX_BYTES } from '@agency-crm/shared';
 import type { Config } from '../lib/config.js';
 import { openDatabase, type DbHandle } from '../db/client.js';
 import { AppError, errorBody } from '../lib/errors.js';
 import { authRoutes } from '../modules/auth/routes.js';
+import { clientStatusRoutes } from '../modules/client-statuses/routes.js';
 import { clientRoutes } from '../modules/clients/routes.js';
 import { healthRoutes } from '../modules/health/routes.js';
 import { leadRoutes } from '../modules/leads/routes.js';
@@ -87,6 +89,11 @@ export async function buildApp(config: Config): Promise<FastifyInstance> {
 
   registerSecurity(app, config);
 
+  // Multipart only for uploads (client photos); hard limits so a request can't exhaust memory/disk.
+  await app.register(fastifyMultipart, {
+    limits: { fileSize: PHOTO_MAX_BYTES, files: 1, fields: 0, parts: 1, headerPairs: 200 },
+  });
+
   const apiRoutes: FastifyInstance['apiRoutes'] = [];
   app.decorate('apiRoutes', apiRoutes);
   app.addHook('onRoute', (r) => {
@@ -103,7 +110,8 @@ export async function buildApp(config: Config): Promise<FastifyInstance> {
       await api.register(authRoutes, { config });
       await api.register(setupRoutes, { config });
       await api.register(userRoutes);
-      await api.register(clientRoutes);
+      await api.register(clientRoutes, { config });
+      await api.register(clientStatusRoutes);
       await api.register(leadRoutes);
     },
     { prefix: API_PREFIX },

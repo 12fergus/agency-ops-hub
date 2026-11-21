@@ -15,7 +15,13 @@ export interface Actor {
 }
 
 export type ClientAction =
-  'client:read' | 'client:manageMembers' | 'lead:read' | 'lead:write' | 'lead:export';
+  | 'client:read'
+  | 'client:edit'
+  | 'client:archive'
+  | 'client:manageMembers'
+  | 'lead:read'
+  | 'lead:write'
+  | 'lead:export';
 
 export interface ClientAccess {
   client: Client;
@@ -30,7 +36,8 @@ export interface ClientAccess {
  * - admin: everything.
  * - manager/employee: only clients they are a member of. A non-member gets 404 NOT_FOUND, the same
  *   as a non-existent id, so other clients' IDs can't be probed.
- * - client:manageMembers: managers who are the client's OWNER only (see docs/decisions.md ADR-012).
+ * - client:edit: any member (ADR-019). client:manageMembers: owner-managers only (ADR-012/018).
+ * - client:archive: admins only.
  * - lead:export: admins and member managers.
  */
 export function authorizeClientAccess(
@@ -49,17 +56,24 @@ export function authorizeClientAccess(
   if (!membership) throw notFound('Client');
 
   switch (action) {
+    // Any assigned member (employee, collaborator or owner) may read and edit the client's
+    // details, status and contacts (ADR-019).
     case 'client:read':
+    case 'client:edit':
     case 'lead:read':
     case 'lead:write':
       return { client, membership };
     case 'lead:export':
       if (actor.role === 'manager') return { client, membership };
       throw forbidden();
+    // Managing staff: managers who OWN the client.
     case 'client:manageMembers':
       if (actor.role === 'manager' && membership.membershipRole === 'owner') {
         return { client, membership };
       }
+      throw forbidden();
+    // Archive/unarchive: admins only (handled above). Members see the client but may not.
+    case 'client:archive':
       throw forbidden();
   }
 }

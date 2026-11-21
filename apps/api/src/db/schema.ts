@@ -20,6 +20,11 @@ import { nowIso } from '../lib/normalize.js';
 
 // ---------- enums (TS types + DB CHECKs) ----------
 export const USER_ROLES = ['admin', 'manager', 'employee'] as const;
+/**
+ * DB-level lifecycle values. 'paused' stays allowed by the original CHECK (no table rebuild), but
+ * since migration 0002 the app only writes 'active' | 'archived'; business statuses live in
+ * client_statuses (ADR-019).
+ */
 export const CLIENT_STATUSES = ['active', 'paused', 'archived'] as const;
 export const MEMBERSHIP_ROLES = ['owner', 'collaborator'] as const;
 export const STAGE_TYPES = ['open', 'won', 'lost'] as const;
@@ -126,6 +131,40 @@ export const sessions = sqliteTable(
 );
 
 // ---------- clients ----------
+// ---------- client statuses (admin-defined, colored) ----------
+/** Fixed palette keys: colors map to vetted Tailwind classes in the UI (no free CSS values). */
+export const STATUS_COLORS = [
+  'green',
+  'gray',
+  'amber',
+  'blue',
+  'red',
+  'purple',
+  'teal',
+  'pink',
+] as const;
+
+export const clientStatuses = sqliteTable(
+  'client_statuses',
+  {
+    id: id(),
+    name: text('name').notNull(),
+    color: text('color', { enum: STATUS_COLORS }).notNull(),
+    position: integer('position').notNull(),
+    isDefault: integer('is_default', { mode: 'boolean' }).notNull().default(false),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    ...utcTimestampChecks('client_statuses', ['created_at', 'updated_at']),
+    uniqueIndex('client_statuses_name_unique').on(t.name),
+    uniqueIndex('client_statuses_one_default')
+      .on(t.isDefault)
+      .where(sql`is_default = 1`),
+    check('client_statuses_color_valid', inList('color', STATUS_COLORS)),
+  ],
+);
+
 export const clients = sqliteTable(
   'clients',
   {
@@ -140,9 +179,20 @@ export const clients = sqliteTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
     archivedAt: text('archived_at'),
+    /**
+     * Admin-defined status (פעיל, לא פעיל, …). Added in 0002 as plain nullable columns (no
+     * table rebuild — see ADR-015); the app always sets it. `status` above now only marks
+     * archived vs not (lifecycle).
+     */
+    statusId: text('status_id').references(() => clientStatuses.id),
+    /** Photo/logo: MIME type of the stored file (image/png|jpeg|webp), NULL = no photo. */
+    photoType: text('photo_type'),
+    /** For cache-busting the image URL. */
+    photoUpdatedAt: text('photo_updated_at'),
   },
   (t) => [
     ...utcTimestampChecks('clients', ['created_at', 'updated_at', 'archived_at']),
+    index('clients_status_id_idx').on(t.statusId),
     check('clients_status_valid', inList('status', CLIENT_STATUSES)),
     check(
       'clients_archived_consistent',
@@ -469,6 +519,7 @@ export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Session = typeof sessions.$inferSelect;
 export type Client = typeof clients.$inferSelect;
+export type ClientStatusRow = typeof clientStatuses.$inferSelect;
 export type NewClient = typeof clients.$inferInsert;
 export type ClientMember = typeof clientMembers.$inferSelect;
 export type ClientContact = typeof clientContacts.$inferSelect;

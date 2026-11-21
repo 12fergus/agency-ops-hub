@@ -31,8 +31,19 @@ Disabled accounts are `is_active = 0`, never deleted. Until the auth phase, user
 
 ### clients
 
-`id`, `name`, `business_name`, `status` (`active|paused|archived`), `industry`, `phone`, `email`, `notes`, timestamps, `archived_at`.
-CHECK: `status = 'archived'` ⇔ `archived_at IS NOT NULL`. Index `(status, name)`.
+`id`, `name`, `business_name`, `status`, `status_id` → client_statuses, `industry`, `phone`, `email`, `notes`, `photo_type`, `photo_updated_at`, timestamps, `archived_at`.
+
+- **`status` is the lifecycle only.** The app writes `active` or `archived`. `paused` is still allowed by the original CHECK, but since 0002 it is no longer written. CHECK: `status = 'archived'` ⇔ `archived_at IS NOT NULL`.
+- **`status_id`** is the admin-defined business status (פעיל, לא פעיל, …), set to the default on creation. It was added in 0002 as a nullable column without a table rebuild; the app always sets it.
+- **`photo_type`** (`image/png|jpeg|webp`) and **`photo_updated_at`** describe the photo/logo file at `<UPLOADS_DIR>/clients/<id>.<ext>`. NULL means no photo.
+- Indexes: `(status, name)`, `status_id`.
+
+### client_statuses (0002)
+
+`id`, `name` (unique, 1–40), `color` (CHECK, a palette of `green gray amber blue red purple teal pink`), `position` (display and sort order), `is_default` (**exactly one**, via a partial unique index), timestamps.
+
+- Seeded: פעיל (green, default), לא פעיל (gray), מושהה (amber).
+- A status that is in use, or is the default, can't be deleted (enforced by the service).
 
 ### client_members
 

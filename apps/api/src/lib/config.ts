@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { z } from 'zod';
 
@@ -11,6 +12,8 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   DATABASE_PATH: z.string().min(1).default('data/crm.sqlite'),
   BACKUP_DIR: z.string().min(1).default('backups'),
+  /** Client photos etc. Default: <folder of DATABASE_PATH>/uploads. Local disk only. */
+  UPLOADS_DIR: z.string().min(1).optional(),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   /** Absolute session lifetime. */
   SESSION_TTL_HOURS: z.coerce
@@ -60,7 +63,11 @@ const envSchema = z.object({
     ),
 });
 
-export type Config = z.infer<typeof envSchema> & { webDistPath: string };
+export type Config = Omit<z.infer<typeof envSchema>, 'UPLOADS_DIR'> & {
+  webDistPath: string;
+  /** Resolved uploads folder (always set). */
+  UPLOADS_DIR: string;
+};
 
 /**
  * UNC paths (`\\server\share`, `//server/share`) are network shares: SQLite locking/WAL is unsafe
@@ -85,8 +92,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     throw new Error(`Invalid environment configuration: ${issues}`);
   }
   const cfg = parsed.data;
-  for (const key of ['DATABASE_PATH', 'BACKUP_DIR'] as const) {
-    if (isNetworkPath(cfg[key])) {
+  for (const key of ['DATABASE_PATH', 'BACKUP_DIR', 'UPLOADS_DIR'] as const) {
+    const value = cfg[key];
+    if (value && isNetworkPath(value)) {
       throw new Error(`${key} must be on the host's local disk, not a network share`);
     }
   }
@@ -97,6 +105,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
         ? cfg.DATABASE_PATH
         : path.resolve(REPO_ROOT, cfg.DATABASE_PATH),
     BACKUP_DIR: path.resolve(REPO_ROOT, cfg.BACKUP_DIR),
+    UPLOADS_DIR: cfg.UPLOADS_DIR
+      ? path.resolve(REPO_ROOT, cfg.UPLOADS_DIR)
+      : cfg.DATABASE_PATH === ':memory:'
+        ? path.join(tmpdir(), `crm-uploads-${process.pid}`)
+        : path.join(path.dirname(path.resolve(REPO_ROOT, cfg.DATABASE_PATH)), 'uploads'),
     webDistPath: path.join(REPO_ROOT, 'apps/web/dist'),
   };
 }

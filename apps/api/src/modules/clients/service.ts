@@ -1,4 +1,5 @@
 import { recordAudit } from '../../db/repositories/audit.js';
+import { defaultStatus } from '../client-statuses/service.js';
 import {
   clearPrimaryContact,
   findClientById,
@@ -39,6 +40,7 @@ export interface CreateClientInput {
   phone?: string | null;
   email?: string | null;
   notes?: string | null;
+  statusId?: string | null;
 }
 
 export interface CreatedClient {
@@ -61,6 +63,8 @@ export function createClient(
       phone: input.phone ?? null,
       email: normalizeEmail(input.email),
       notes: input.notes ?? null,
+      // Admin-defined status; the default one unless chosen (ADR-019).
+      statusId: input.statusId ?? defaultStatus(tx).id,
     });
     const pipeline = insertPipeline(tx, {
       clientId: client.id,

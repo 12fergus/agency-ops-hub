@@ -28,7 +28,7 @@ No new endpoints (health only). No auth: actor IDs are passed explicitly until P
 
 Carried into Phase 2 (from the review, ADR-011): actor-scoped lookups and NOT_FOUND for inaccessible IDs, a mapper for SQLite constraint errors, and Zod validation at the API boundary (lengths, email format).
 
-## Phase 2 — Authentication & authorization (implemented 2026-11-21, awaiting acceptance; branch `phase-2-auth`)
+## Phase 2 — Authentication & authorization (committed on `phase-2-auth`, PR pending)
 
 Done:
 
@@ -44,10 +44,24 @@ Done:
 
 Resolved from the Phase 1 review: actor-scoped lookups with NOT_FOUND for inaccessible IDs, the SQLite error mapper, and Zod validation at the boundary for the new routes.
 
+## Phase 3 — Clients module (implemented 2026-11-21, awaiting acceptance; branch `phase-3-clients`)
+
+Done:
+
+- API: paginated/searchable/filterable client list (SQL-scoped to memberships, allowlisted sort, max 100/page), create (admin), edit (admin + owner-manager), archive/unarchive (admin; records preserved, archived = read-only), contacts CRUD (one primary), staff add/remove per role, `/users/assignable` staff picker; `permissions` in every client response
+- Shared Zod schemas used by API and forms; PATCH schemas without defaults (omitted fields unchanged)
+- Web: Hebrew RTL clients page with TanStack Table v9 (server-side sort + pagination), debounced search, status/owner filters, loading/error/empty states; accessible create/edit drawer (focus management, Esc, focus trap); client detail page with details, contacts and assigned staff; in-page confirmations (no browser dialogs); phones/emails LTR
+- Tests: API 157 (scoping, roles, validation, archive preservation, filters, sort allowlist, contacts, PATCH regression), web 18, e2e 9 (incl. full client workflow + employee scoping)
+- New dependency: `@tanstack/react-table` 9.3.1 (named in the spec)
+- Added on request (ADR-019): **admin-defined client statuses** with colors (settings page הגדרות; filter + sort by admin order; migration 0002 seeds פעיל/לא פעיל/מושהה), **workers create clients and edit assigned ones** (creator auto-assigned), **client photo/logo upload** (PNG/JPEG/WebP ≤ 2 MB, content-sniffed; new dependency `@fastify/multipart`)
+- Review + browser-check fixes: archived clients read-only on every write path, drawer focus stability, page clamp, accessible inline confirmations, formatting-insensitive phone search, 401-mid-session no longer hangs on the loader
+
 ## Proposed next phases
 
+- **Phase 4 (agreed 2026-11-21): client communication log + tasks.** Record calls / WhatsApp / meetings / notes per client; **"צור משימת המשך"** creates a follow-up task from a record (title, assignee, deadline) that stays linked to the record that created it; task list with overdue queue.
+
 1. ~~Auth & users~~ (Phase 2)
-2. **Clients:** clients, members, contacts, access guards; client list/profile UI (router + shadcn primitives)
+2. ~~Clients~~ (Phase 3)
 3. **Leads core:** pipelines/stages, campaigns, leads CRUD, phone normalization, duplicate warning, activities
 4. **Views:** RTL table (TanStack Table) with filters, search, pagination; Kanban pipeline
 5. **Tasks & dashboard:** follow-ups, overdue queue, dashboard counts

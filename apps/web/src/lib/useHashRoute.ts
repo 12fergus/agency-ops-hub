@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 /**
  * Tiny hash router (`#/users`) — two pages don't justify a router dependency.
@@ -12,5 +12,9 @@ export function useHashRoute(): [string, (route: string) => void] {
     window.addEventListener('hashchange', onChange);
     return () => window.removeEventListener('hashchange', onChange);
   }, []);
-  return [route, (r: string) => (window.location.hash = r ? `/${r}` : '')];
+  // Stable identity, so it can be used in memoized callbacks/columns.
+  const navigate = useCallback((r: string) => {
+    window.location.hash = r ? `/${r}` : '';
+  }, []);
+  return [route, navigate];
 }

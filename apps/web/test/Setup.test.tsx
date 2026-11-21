@@ -96,3 +96,37 @@ describe('first-run setup page', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(he['error.SETUP_CODE_INVALID']);
   });
 });
+
+describe('session loss mid-use (browser-check regression)', () => {
+  it('a 401 on a data request returns to the login page instead of an endless loader', async () => {
+    let sessionValid = true;
+    const ADMIN_USER = { ...ADMIN };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.endsWith('/auth/me')) {
+          return sessionValid
+            ? json(200, { data: { user: ADMIN_USER } })
+            : json(401, { error: { code: 'UNAUTHENTICATED', message: 'x' } });
+        }
+        // Setup status IS loaded (the case that used to get removed from the cache and hang).
+        if (url.endsWith('/setup/status')) return json(200, { data: { needsSetup: false } });
+        if (url.endsWith('/auth/options')) return json(200, { data: { signupEnabled: true } });
+        if (url.endsWith('/health')) {
+          return json(200, {
+            data: { status: 'ok', db: 'ok', version: '0.0.0', time: '2026-01-01T10:00:00.000Z' },
+          });
+        }
+        return json(401, { error: { code: 'UNAUTHENTICATED', message: 'x' } });
+      }),
+    );
+    renderApp();
+    expect(await screen.findByText('הבעלים')).toBeInTheDocument();
+    sessionValid = false;
+    fireEvent.click(screen.getByRole('link', { name: he['nav.clients'] })); // → 401 on the list
+    expect(
+      await screen.findByRole('heading', { name: new RegExp(he['auth.title']) }),
+    ).toBeInTheDocument();
+    window.location.hash = '';
+  });
+});

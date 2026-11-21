@@ -17,6 +17,7 @@ const EXPECTED_TABLES = [
   'campaigns',
   'client_contacts',
   'client_members',
+  'client_statuses',
   'clients',
   'lead_activities',
   'lead_import_batches',
@@ -180,5 +181,54 @@ describe('migrations', () => {
     // Plain drizzle would report "nothing to do" and silently never create branch_only.
     expect(() => runMigrations(handle, dir)).toThrow(MigrationDriftError);
     handle.close();
+  });
+});
+
+describe('migration 0002 backfill (custom statuses)', () => {
+  it('a paused client on 0001 becomes status מושהה + lifecycle active; others get פעיל', () => {
+    const t = tempDir();
+    const dir = path.join(t.dir, 'migrations');
+    cpSync(MIGRATIONS_DIR, dir, { recursive: true });
+    const journalFile = path.join(dir, 'meta/_journal.json');
+    const full = readFileSync(journalFile, 'utf8');
+    const journal = JSON.parse(full);
+    // Pretend only 0000 + 0001 exist.
+    writeFileSync(
+      journalFile,
+      JSON.stringify({ ...journal, entries: journal.entries.slice(0, 2) }),
+    );
+
+    const handle = openDatabase(':memory:');
+    try {
+      runMigrations(handle, dir);
+      handle.sqlite
+        .prepare(
+          "INSERT INTO clients (id, name, status) VALUES ('p', 'Paused one', 'paused'), ('a', 'Active one', 'active')",
+        )
+        .run();
+      handle.sqlite
+        .prepare(
+          "INSERT INTO clients (id, name, status, archived_at) VALUES ('x', 'Archived one', 'archived', '2026-01-01T00:00:00.000Z')",
+        )
+        .run();
+
+      writeFileSync(journalFile, full); // now 0002 arrives
+      runMigrations(handle, dir);
+
+      const rows = handle.sqlite
+        .prepare(
+          'SELECT c.id, c.status, s.name AS statusName FROM clients c JOIN client_statuses s ON s.id = c.status_id ORDER BY c.id',
+        )
+        .all();
+      expect(rows).toEqual([
+        { id: 'a', status: 'active', statusName: 'פעיל' },
+        { id: 'p', status: 'active', statusName: 'מושהה' },
+        { id: 'x', status: 'archived', statusName: 'פעיל' }, // lifecycle kept
+      ]);
+      expect(handle.sqlite.pragma('foreign_key_check')).toEqual([]);
+    } finally {
+      handle.close();
+      t.cleanup();
+    }
   });
 });

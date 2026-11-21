@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type { LoginInput, UserDto } from '@agency-crm/shared';
 import { ApiRequestError, apiRequest } from '@/lib/api';
+import { isAppStateQuery } from '@/lib/queryClient';
 
 export const ME_KEY = ['auth', 'me'] as const;
 
@@ -26,7 +27,7 @@ export function useCurrentUser() {
  * (the App is subscribed to it; removing it would leave the UI stuck on the old state).
  */
 function dropUserData(qc: QueryClient) {
-  qc.removeQueries({ predicate: (q) => q.queryKey[0] !== ME_KEY[0] });
+  qc.removeQueries({ predicate: (q) => !isAppStateQuery(q.queryKey) });
 }
 
 export function useLogin() {

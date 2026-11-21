@@ -1,37 +1,11 @@
 import { and, eq } from 'drizzle-orm';
 import { recordAudit } from '../../db/repositories/audit.js';
 import { findMembership, findUserById } from '../../db/repositories/users.js';
-import { clientMembers, users, type ClientMember } from '../../db/schema.js';
+import { clientMembers, type ClientMember } from '../../db/schema.js';
 import { withTransaction, type Executor } from '../../db/tx.js';
-import { AppError, forbidden, notFound } from '../../lib/errors.js';
+import { AppError, forbidden, invalidState, notFound } from '../../lib/errors.js';
 import { authorizeClientAccess, type Actor } from '../auth/authorize.js';
 import { addClientMember } from './service.js';
-
-export interface MemberView {
-  userId: string;
-  displayName: string;
-  email: string;
-  role: string;
-  isActive: boolean;
-  membershipRole: ClientMember['membershipRole'];
-}
-
-export function listMembersAsActor(exec: Executor, actor: Actor, clientId: string): MemberView[] {
-  authorizeClientAccess(exec, actor, clientId, 'client:read');
-  return exec
-    .select({
-      userId: users.id,
-      displayName: users.displayName,
-      email: users.email,
-      role: users.role,
-      isActive: users.isActive,
-      membershipRole: clientMembers.membershipRole,
-    })
-    .from(clientMembers)
-    .innerJoin(users, eq(users.id, clientMembers.userId))
-    .where(eq(clientMembers.clientId, clientId))
-    .all();
-}
 
 /**
  * Managers may change membership ONLY on clients they own, and cannot escalate:
@@ -47,7 +21,9 @@ export function addMemberAsActor(
   input: { userId: string; membershipRole: ClientMember['membershipRole'] },
 ): ClientMember {
   return withTransaction(exec, (tx) => {
-    authorizeClientAccess(tx, actor, clientId, 'client:manageMembers');
+    const { client } = authorizeClientAccess(tx, actor, clientId, 'client:manageMembers');
+    // Archived clients are read-only, staff included (same rule as details and contacts).
+    if (client.archivedAt) throw invalidState('Client is archived');
     const target = findUserById(tx, input.userId);
     if (!target || !target.isActive) throw notFound('User');
     if (actor.role !== 'admin') {
@@ -71,7 +47,9 @@ export function removeMemberAsActor(
   userId: string,
 ): void {
   withTransaction(exec, (tx) => {
-    authorizeClientAccess(tx, actor, clientId, 'client:manageMembers');
+    const { client } = authorizeClientAccess(tx, actor, clientId, 'client:manageMembers');
+    // Archived clients are read-only, staff included (same rule as details and contacts).
+    if (client.archivedAt) throw invalidState('Client is archived');
     const membership = findMembership(tx, clientId, userId);
     if (!membership) throw notFound('Member');
     if (actor.role !== 'admin' && membership.membershipRole === 'owner') throw forbidden();

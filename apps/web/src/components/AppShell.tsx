@@ -2,13 +2,7 @@ import type { ReactNode } from 'react';
 import type { UserDto } from '@agency-crm/shared';
 import { t, type MessageKey } from '@/lib/i18n';
 
-const COMING_SOON: MessageKey[] = [
-  'nav.dashboard',
-  'nav.clients',
-  'nav.leads',
-  'nav.tasks',
-  'nav.campaigns',
-];
+const COMING_SOON: MessageKey[] = ['nav.dashboard', 'nav.leads', 'nav.tasks', 'nav.campaigns'];
 
 interface Props {
   user: UserDto;
@@ -20,17 +14,21 @@ interface Props {
 
 /** RTL shell: navigation is the first flex child, so it renders on the right in dir="rtl". */
 export function AppShell({ user, route, onNavigate, onLogout, children }: Props) {
+  // A section stays highlighted on its sub-pages (e.g. clients/<id>).
+  const isCurrent = (target: string) =>
+    target === '' ? route === '' : route === target || route.startsWith(`${target}/`);
+
   const link = (target: string, label: MessageKey) => (
     <li>
       <a
         href={`#/${target}`}
-        aria-current={route === target ? 'page' : undefined}
+        aria-current={isCurrent(target) ? 'page' : undefined}
         onClick={(e) => {
           e.preventDefault();
           onNavigate(target);
         }}
         className={`block rounded-md px-3 py-2 ${
-          route === target ? 'bg-blue-50 font-medium text-blue-800' : 'hover:bg-slate-50'
+          isCurrent(target) ? 'bg-blue-50 font-medium text-blue-800' : 'hover:bg-slate-50'
         }`}
       >
         {t(label)}
@@ -47,7 +45,9 @@ export function AppShell({ user, route, onNavigate, onLogout, children }: Props)
         <nav aria-label={t('nav.label')}>
           <ul className="space-y-1 px-2">
             {link('', 'nav.home')}
+            {link('clients', 'nav.clients')}
             {user.role === 'admin' && link('users', 'nav.users')}
+            {user.role === 'admin' && link('settings', 'nav.settings')}
             {COMING_SOON.map((key) => (
               <li key={key}>
                 <span
