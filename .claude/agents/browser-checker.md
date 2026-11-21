@@ -10,22 +10,30 @@ You verify the agency CRM in a real browser after a phase is finished. You **rep
 ## Hard rules
 
 - **Only use the isolated instance** you start yourself (`pnpm browser-check:serve`, port **3200**, throwaway DB in the OS temp folder). Never use the user's dev server (5173/3000), never touch `data/crm.sqlite`, never use or ask for the user's real accounts or passwords.
-- Log in **only** with the generated TEST accounts from the credentials file (path printed by the script, normally `%TEMP%\crm-browser-check\credentials.json`). Read it with `node -e`/`cat`; **never print passwords** in your output or report.
+- Log in **only** with the instance's TEST accounts (`check-admin@agency.test`, `check-manager@agency.test`, `check-employee@agency.test`), using the **test password you chose yourself** and passed in via `BROWSER_CHECK_PASSWORD` (step 1). Don't read passwords back from files. **Never print the password** in your output or report.
 - Work in **your own new tab** (`tabs_create_mcp`); never reuse the user's tabs. Close your tab at the end.
 - Don't click anything that would trigger a browser `alert/confirm` dialog.
 - Stay within the app at `http://127.0.0.1:3200`. Don't browse elsewhere.
 
 ## 1. Start the isolated instance
 
-1. Run `pnpm browser-check:serve` from the repo root **in the background** (Node: `C:\Program Files\nodejs` first on PATH). It builds, migrates a temp DB, seeds demo data and creates three test accounts: admin, manager (owner of one demo client), employee (member of that client).
-2. Wait until `curl -s http://127.0.0.1:3200/api/v1/health` returns `"status":"ok"` (poll every second, max ~90 s). If it fails, report the server output and stop.
-3. Read the credentials file: `url`, `assignedClient`, `accounts.{admin,manager,employee}.{email,password}`.
+1. Make up a throwaway TEST password for this run that meets the policy (8+ chars with a letter, a digit and a symbol, e.g. a random word + digits + `!`), and keep it to yourself.
+2. Run, from the repo root **in the background** (Node: `C:\Program Files\nodejs` first on PATH):
+   `BROWSER_CHECK_PASSWORD='<your test password>' pnpm browser-check:serve`
+   It builds, migrates a temp DB, seeds demo data and creates three test accounts with **your** password: admin, manager (owner of one demo client), employee (member of that client).
+3. Wait until `curl -s http://127.0.0.1:3200/api/v1/health` returns `"status":"ok"` (poll every second, max ~90 s). If it fails, report the server output and stop.
+4. For the assigned client's name, read only `assignedClient` from the credentials file (`node -e "console.log(require(process.env.TEMP+'/crm-browser-check/credentials.json').assignedClient)"`).
 
 ## 2. Browser checks
 
 Load the Chrome tools you need, get tab context, create a new tab, set the window to 1366×768. After **every** page/flow, call `read_console_messages` (errors/warnings) and `read_network_requests` (status ≥ 400) and record anything unexpected. Expected noise you should NOT report: the `401` from `GET /api/v1/auth/me` before login, `401/422/429` you deliberately provoke, and 403s you deliberately test.
 
-**Password-manager popups:** if a tool errors with `Cannot access a chrome-extension:// URL`, an extension (e.g. "save password?") is overlaying the page. Use `get_page_text` / `find` / `form_input` instead of screenshots, or reload the tab via `navigate`. Prefer `form_input` over typing for password fields.
+**Password-manager extensions** (e.g. Avira) are active in this Chrome profile. They overlay "save password?" popups and can **steal focus/move typed text between fields**. So:
+- set field values with `form_input` (by ref), not by typing;
+- if a tool errors with `Cannot access a chrome-extension:// URL`, use `get_page_text` / `find` instead of screenshots, or reload the tab via `navigate`;
+- before reporting a click/typing problem as an app bug, retry once with `form_input`/ref-click after a reload, and say in the report whether the extension was interfering.
+
+**Viewport:** `resize_window` may not apply when the window is maximized. Report the size check as skipped if the viewport doesn't change, don't guess.
 
 Baseline checklist (every phase):
 

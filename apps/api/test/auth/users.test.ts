@@ -23,7 +23,13 @@ describe('admin user management', () => {
   it('only admins can list/create/change role/disable users', async () => {
     for (const email of ['mgr@agency.test', 'emp@agency.test']) {
       const cookie = await loginAs(app, email);
-      expect((await call(app, 'GET', '/api/v1/users', { cookie })).statusCode).toBe(403);
+      const denied = await call(app, 'GET', '/api/v1/users', { cookie });
+      expect(denied.statusCode).toBe(403);
+      // Generic wording: this route has nothing to do with clients.
+      expect(denied.json().error).toEqual({
+        code: 'FORBIDDEN',
+        message: 'You do not have permission for this action',
+      });
       expect(
         (
           await call(app, 'POST', '/api/v1/users', {

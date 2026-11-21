@@ -25,7 +25,9 @@ export const crossClient = (what: string) =>
 export const invalidAssignee = () =>
   new AppError(422, 'INVALID_ASSIGNEE', 'Assignee is inactive or has no access to this client');
 
-export const forbidden = () => new AppError(403, 'FORBIDDEN', 'No access to this client');
+/** The caller is authenticated but their role may not do this (used for role and client rules). */
+export const forbidden = (message = 'You do not have permission for this action') =>
+  new AppError(403, 'FORBIDDEN', message);
 
 export const validation = (message: string) => new AppError(422, 'VALIDATION', message);
 

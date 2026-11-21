@@ -4,12 +4,14 @@
  *
  * - Production build (API serves the built SPA) on 127.0.0.1:3200 (BROWSER_CHECK_PORT to change).
  * - Fresh SQLite DB in the OS temp folder, migrated, demo-seeded, plus three login-capable TEST
- *   accounts (admin / manager / employee) with passwords generated per run.
+ *   accounts (admin / manager / employee). Password: BROWSER_CHECK_PASSWORD if set (the agent's
+ *   own test value), otherwise generated per run.
  * - Credentials go to a JSON file in the OS temp folder (path printed, passwords never printed).
  * - Refuses to run when NODE_ENV=production in the calling environment.
  * - Ctrl+C / SIGTERM stops the server; the temp folder is removed on exit (best effort).
  */
 import { randomBytes } from 'node:crypto';
+import { passwordProblems } from '@agency-crm/shared';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -28,11 +30,28 @@ export const CREDENTIALS_FILE = path.join(DIR, 'credentials.json');
 /** Test-only password that satisfies the shared policy (letter, digit, symbol, 8+). */
 const testPassword = () => `Bc-${randomBytes(9).toString('base64url')}-7!`;
 
+/**
+ * The browser-checker agent passes its OWN test password (BROWSER_CHECK_PASSWORD) so it can type it
+ * in the browser without reading secrets back from a file. Used for all three test accounts.
+ * Only ever for this throwaway instance; must satisfy the normal password policy.
+ */
+function suppliedPassword(): string | null {
+  const pw = process.env.BROWSER_CHECK_PASSWORD;
+  if (!pw) return null;
+  const problems = passwordProblems(pw);
+  if (problems.length > 0) {
+    throw cliError(`BROWSER_CHECK_PASSWORD breaks the password policy (${problems.join(', ')}).`);
+  }
+  return pw;
+}
+
 await runCli('browser-check:serve', async () => {
   if (process.env.NODE_ENV === 'production') {
     throw cliError('refused: never run the browser-check instance with NODE_ENV=production.');
   }
   const port = Number(process.env.BROWSER_CHECK_PORT ?? 3200);
+  const supplied = suppliedPassword();
+  const pw = () => supplied ?? testPassword();
 
   rmSync(DIR, { recursive: true, force: true });
   mkdirSync(DIR, { recursive: true });
@@ -41,9 +60,9 @@ await runCli('browser-check:serve', async () => {
   // 1. Prepare the throwaway DB with the real migrator, demo seed and bootstrap code paths.
   const setup = openDatabase(dbPath);
   const accounts = {
-    admin: { email: 'check-admin@agency.test', password: testPassword(), role: 'admin' },
-    manager: { email: 'check-manager@agency.test', password: testPassword(), role: 'manager' },
-    employee: { email: 'check-employee@agency.test', password: testPassword(), role: 'employee' },
+    admin: { email: 'check-admin@agency.test', password: pw(), role: 'admin' },
+    manager: { email: 'check-manager@agency.test', password: pw(), role: 'manager' },
+    employee: { email: 'check-employee@agency.test', password: pw(), role: 'employee' },
   } as const;
   try {
     runMigrations(setup);

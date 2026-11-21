@@ -39,8 +39,10 @@ export function AppShell({ user, route, onNavigate, onLogout, children }: Props)
   );
 
   return (
-    <div className="flex h-full">
-      <aside className="w-56 shrink-0 border-e border-slate-200 bg-white">
+    // Only <main> scrolls: the outer shell is locked to the viewport (no second page scrollbar),
+    // so the header (with יציאה) and the side nav always stay visible.
+    <div className="flex h-full overflow-hidden">
+      <aside className="w-56 shrink-0 overflow-y-auto border-e border-slate-200 bg-white">
         <div className="px-4 py-4 text-lg font-bold">{t('app.name')}</div>
         <nav aria-label={t('nav.label')}>
           <ul className="space-y-1 px-2">
@@ -60,8 +62,8 @@ export function AppShell({ user, route, onNavigate, onLogout, children }: Props)
           </ul>
         </nav>
       </aside>
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 items-center justify-end gap-3 border-b border-slate-200 bg-white px-4 text-sm">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <header className="flex h-14 shrink-0 items-center justify-end gap-3 border-b border-slate-200 bg-white px-4 text-sm">
           <span>
             {t('auth.signedInAs')}
             <strong>{user.displayName}</strong> · {t(`role.${user.role}` as MessageKey)}
@@ -74,7 +76,8 @@ export function AppShell({ user, route, onNavigate, onLogout, children }: Props)
             {t('auth.logout')}
           </button>
         </header>
-        <main className="flex-1 overflow-auto p-6">{children}</main>
+        {/* relative: absolutely-positioned children (e.g. sr-only labels) stay inside the scroll area */}
+        <main className="relative min-h-0 flex-1 overflow-auto p-6">{children}</main>
       </div>
     </div>
   );
