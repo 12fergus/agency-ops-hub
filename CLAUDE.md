@@ -19,6 +19,8 @@ Node ≥ 24 (dev host: v26), pnpm 12. Run from repo root.
 - Single test: `pnpm --filter @agency-crm/api exec vitest run test/health.test.ts` (or `-t "name"`)
 - **Before reporting a task done:** `pnpm check` (lint + format + typecheck + test + build), plus `pnpm test:e2e` in UI phases. Report actual output; never claim a pass you didn't run.
 - **Review every phase:** launch the `code-reviewer` agent on the phase's changes (it includes untracked files) in parallel with `test-runner`. Fix confirmed blockers/should-fix items, re-run checks, and include the review result (what was fixed, what was deferred and why) in the phase report.
+- **Browser check every phase:** once `test-runner` passes, launch the `browser-checker` agent (sequentially — both build `dist`). It runs `pnpm browser-check:serve` (isolated production build on :3200, throwaway DB, generated test accounts — never the dev DB or real accounts) and walks the app in Chrome: console errors, failed requests, Hebrew errors/RTL, role access, plus the phase's new flows. Fix confirmed issues, re-run, and include its result table in the phase report.
+- `pnpm browser-check:serve` — the isolated instance (credentials file path printed; passwords never printed)
 
 ## Source of truth
 
